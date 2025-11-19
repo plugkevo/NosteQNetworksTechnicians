@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Nosteq Technicians</string>
+    <string name="title_activity_login_screen">LoginScreen</string>
+    <string name="title_activity_map_screen">MapScreen</string>
+    <string name="title_activity_network_dashboard_screen">NetworkDashboardScreen</string>
+    <string name="title_activity_pofile_screen">PofileScreen</string>
+    <string name="title_activity_router_screen">RouterScreen</string>
+</resources>

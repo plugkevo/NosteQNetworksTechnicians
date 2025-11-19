@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "527610271047",
+    "project_id": "nosteqapk",
+    "storage_bucket": "nosteqapk.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:527610271047:android:50f0395808ea893ee62862",
+        "android_client_info": {
+          "package_name": "com.kevann.nosteq"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC88ihiuBqVtaNENo27dHeqZ_lHbPshiYs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:527610271047:android:75b608fcc5ff0bfde62862",
+        "android_client_info": {
+          "package_name": "com.kevann.nosteqTech"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC88ihiuBqVtaNENo27dHeqZ_lHbPshiYs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
