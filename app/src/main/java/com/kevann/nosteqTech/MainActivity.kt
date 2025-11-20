@@ -13,12 +13,14 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.kevann.nosteqTech.ui.theme.NosteqTheme
+import com.kevann.nosteqTech.viewmodel.NetworkViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,7 +38,10 @@ fun NosteqApp() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val showBottomBar = currentRoute != "login" && currentRoute?.startsWith("details") == false
+    val showBottomBar = currentRoute != "login" &&
+            currentRoute?.startsWith("details") == false
+
+    val networkViewModel: NetworkViewModel = viewModel()
 
     Scaffold(
         bottomBar = {

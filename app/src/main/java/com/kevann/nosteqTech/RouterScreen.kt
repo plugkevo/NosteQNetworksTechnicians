@@ -1,6 +1,7 @@
 package com.kevann.nosteqTech
 
 
+
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -22,18 +23,32 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kevann.nosteqTech.ui.theme.NosteqRed
 import com.kevann.nosteqTech.ui.theme.NosteqTheme
+import com.kevann.nosteqTech.viewmodel.NetworkViewModel
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RouterDetailsScreen(routerId: String, onBackClick: () -> Unit) {
-    val router = MockData.getRouterById(routerId)
+fun RouterDetailsScreen(
+    routerId: String, // This is now the ONU SN
+    onBackClick: () -> Unit,
+    viewModel: NetworkViewModel = viewModel()
+) {
+    val onu = viewModel.getOnuById(routerId)
     val context = LocalContext.current
 
-    if (router == null) {
+    if (onu == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Router not found")
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("ONU not found", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onBackClick) {
+                    Text("Go Back")
+                }
+            }
         }
         return
     }
@@ -58,17 +73,22 @@ fun RouterDetailsScreen(routerId: String, onBackClick: () -> Unit) {
         ) {
             // Header
             Text(
-                text = router.customerName,
+                text = onu.name,
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "IP: ${router.ipAddress}",
+                text = "IP: ${onu.ipAddress ?: "N/A"}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "MAC: ${router.macAddress}",
+                text = "MAC: ${onu.uniqueExternalId ?: "N/A"}", // Using uniqueExternalId as MAC/ID placeholder if MAC is missing
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "SN: ${onu.sn}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -94,18 +114,18 @@ fun RouterDetailsScreen(routerId: String, onBackClick: () -> Unit) {
                 ) {
                     TelemetryItem(
                         label = "Rx Power",
-                        value = "${router.rxPower} dBm",
-                        isCritical = router.rxPower < -27.0
+                        value = if (onu.rxPower != null) "${onu.rxPower} dBm" else "N/A",
+                        isCritical = (onu.rxPower ?: -100.0) < -27.0
                     )
                     TelemetryItem(
                         label = "Tx Power",
-                        value = "${router.txPower} dBm",
+                        value = if (onu.txPower != null) "${onu.txPower} dBm" else "N/A",
                         isCritical = false
                     )
                     TelemetryItem(
-                        label = "Temp",
-                        value = "${router.temperature}°C",
-                        isCritical = router.temperature > 60
+                        label = "Distance",
+                        value = if (onu.distance != null) "${onu.distance}m" else "N/A",
+                        isCritical = false
                     )
                 }
             }
@@ -114,14 +134,23 @@ fun RouterDetailsScreen(routerId: String, onBackClick: () -> Unit) {
 
             // Customer Info
             Text(
-                text = "Customer Location",
+                text = "Location & Zone",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text(text = router.address, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Zone: ${onu.zoneName ?: "Unknown"}",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    if (onu.odbName != null) {
+                        Text(
+                            text = "ODB: ${onu.odbName}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = { Toast.makeText(context, "Calling Customer...", Toast.LENGTH_SHORT).show() },
@@ -148,7 +177,9 @@ fun RouterDetailsScreen(routerId: String, onBackClick: () -> Unit) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(router.address)}")
+                        // Using zone as address placeholder since address isn't in OnuDetail
+                        val address = onu.address ?: onu.zoneName ?: ""
+                        val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(address)}")
                         val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
                         mapIntent.setPackage("com.google.android.apps.maps")
                         try {
@@ -165,7 +196,7 @@ fun RouterDetailsScreen(routerId: String, onBackClick: () -> Unit) {
                 }
 
                 OutlinedButton(
-                    onClick = { Toast.makeText(context, "Pinging ${router.ipAddress}...", Toast.LENGTH_SHORT).show() },
+                    onClick = { Toast.makeText(context, "Pinging ${onu.ipAddress ?: "device"}...", Toast.LENGTH_SHORT).show() },
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Default.NetworkCheck, contentDescription = null)
@@ -182,7 +213,7 @@ fun RouterDetailsScreen(routerId: String, onBackClick: () -> Unit) {
                     onBackClick()
                 },
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)) // Success Green
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
             ) {
                 Icon(Icons.Default.CheckCircle, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -204,11 +235,11 @@ fun TelemetryItem(label: String, value: String, isCritical: Boolean) {
         )
     }
 }
+
 @Preview(showBackground = true)
 @Composable
 fun RouterDetailsScreenPreview() {
     NosteqTheme {
-        // Using "1" as it corresponds to the first item in MockData
         RouterDetailsScreen(routerId = "1", onBackClick = {})
     }
 }

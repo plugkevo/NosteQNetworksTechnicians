@@ -5,9 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WifiOff
@@ -19,24 +19,51 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kevann.nosteqTech.data.api.OnuDetail
+
 
 import com.kevann.nosteqTech.ui.theme.NosteqRed
 import com.kevann.nosteqTech.ui.theme.NosteqTheme
 import com.kevann.nosteqTech.ui.theme.NosteqYellow
+import com.kevann.nosteqTech.viewmodel.NetworkState
+import com.kevann.nosteqTech.viewmodel.NetworkViewModel
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NetworkDashboardScreen(onRouterClick: (String) -> Unit) {
+fun NetworkDashboardScreen(
+    onRouterClick: (String) -> Unit,
+    viewModel: NetworkViewModel = viewModel()
+) {
     var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf<RouterStatus?>(null) }
+    var selectedFilter by remember { mutableStateOf<String?>(null) }
 
-    val filteredRouters = MockData.routers.filter { router ->
-        (selectedFilter == null || router.status == selectedFilter) &&
-                (router.customerName.contains(searchQuery, ignoreCase = true) ||
-                        router.customerId.contains(searchQuery, ignoreCase = true))
+    val networkState by viewModel.networkState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.fetchAllOnus()
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Network Dashboard",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            IconButton(onClick = { viewModel.fetchAllOnus() }) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+            }
+        }
+
         // Search Bar
         SearchBar(
             query = searchQuery,
@@ -44,50 +71,118 @@ fun NetworkDashboardScreen(onRouterClick: (String) -> Unit) {
             onSearch = {},
             active = false,
             onActiveChange = {},
-            placeholder = { Text("Search Customer ID or Name") },
+            placeholder = { Text("Search SN or Name") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
         ) {}
 
-        // Filter Chips
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
-                selected = selectedFilter == RouterStatus.LOS,
-                onClick = { selectedFilter = if (selectedFilter == RouterStatus.LOS) null else RouterStatus.LOS },
+                selected = selectedFilter == "Los",
+                onClick = { selectedFilter = if (selectedFilter == "Los") null else "Los" },
                 label = { Text("Critical (LOS)") },
-                leadingIcon = { if (selectedFilter == RouterStatus.LOS) Icon(Icons.Default.WifiOff, null) else null }
+                leadingIcon = { if (selectedFilter == "Los") Icon(Icons.Default.WifiOff, null) else null }
             )
             FilterChip(
-                selected = selectedFilter == RouterStatus.LATENCY,
-                onClick = { selectedFilter = if (selectedFilter == RouterStatus.LATENCY) null else RouterStatus.LATENCY },
-                label = { Text("Latency") },
-                leadingIcon = { if (selectedFilter == RouterStatus.LATENCY) Icon(Icons.Default.Warning, null) else null }
+                selected = selectedFilter == "Offline",
+                onClick = { selectedFilter = if (selectedFilter == "Offline") null else "Offline" },
+                label = { Text("Offline") },
+                leadingIcon = { if (selectedFilter == "Offline") Icon(Icons.Default.Warning, null) else null }
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Router List
-        LazyColumn(
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(filteredRouters) { router ->
-                RouterCard(router = router, onClick = { onRouterClick(router.id) })
+        when (val state = networkState) {
+            is NetworkState.Loading -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Loading ONUs...")
+                    }
+                }
+            }
+            is NetworkState.Error -> {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = NosteqRed,
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "Error Loading Data",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            state.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = { viewModel.fetchAllOnus() }) {
+                            Text("Retry")
+                        }
+                    }
+                }
+            }
+            is NetworkState.Success -> {
+                val filteredOnus = state.onus.filter { onu ->
+                    (selectedFilter == null || onu.status.equals(selectedFilter, ignoreCase = true)) &&
+                            (onu.name.contains(searchQuery, ignoreCase = true) ||
+                                    onu.sn.contains(searchQuery, ignoreCase = true))
+                }
+
+                if (filteredOnus.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "No ONUs found",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filteredOnus.size) { index ->
+                            val onu = filteredOnus[index]
+                            OnuCard(onu = onu, onClick = { onRouterClick(onu.sn) })
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun RouterCard(router: Router, onClick: () -> Unit) {
+fun OnuCard(onu: OnuDetail, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -106,11 +201,11 @@ fun RouterCard(router: Router, onClick: () -> Unit) {
                 modifier = Modifier
                     .size(12.dp)
                     .background(
-                        color = when (router.status) {
-                            RouterStatus.LOS -> NosteqRed
-                            RouterStatus.LATENCY -> NosteqYellow
-                            RouterStatus.OFFLINE -> Color.Gray
-                            RouterStatus.ONLINE -> Color.Green
+                        color = when (onu.status.lowercase()) {
+                            "los" -> NosteqRed
+                            "offline" -> Color.Gray
+                            "online" -> Color.Green
+                            else -> NosteqYellow
                         },
                         shape = androidx.compose.foundation.shape.CircleShape
                     )
@@ -120,19 +215,19 @@ fun RouterCard(router: Router, onClick: () -> Unit) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = router.customerName,
+                    text = onu.name,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${router.customerId} • ${router.model}",
+                    text = "${onu.sn} • ${onu.model ?: "Unknown Model"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = router.lastSeen,
+                    text = "Last seen: ${onu.lastSeen}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (router.status == RouterStatus.LOS) NosteqRed else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (onu.status.equals("Los", ignoreCase = true)) NosteqRed else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -144,6 +239,7 @@ fun RouterCard(router: Router, onClick: () -> Unit) {
         }
     }
 }
+
 @Preview(showBackground = true)
 @Composable
 fun NetworkDashboardScreenPreview() {
