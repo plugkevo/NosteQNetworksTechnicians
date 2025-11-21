@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kevann.nosteqTech.ui.theme.NosteqRed
 import com.kevann.nosteqTech.ui.theme.NosteqTheme
+import com.kevann.nosteqTech.viewmodel.NetworkState
 import com.kevann.nosteqTech.viewmodel.NetworkViewModel
 
 
@@ -37,13 +40,44 @@ fun RouterDetailsScreen(
     onBackClick: () -> Unit,
     viewModel: NetworkViewModel = viewModel()
 ) {
+    val networkState = viewModel.networkState.collectAsState().value
+    val liveStatus = viewModel.selectedOnuStatus.collectAsState().value
+    val signalInfo = viewModel.selectedOnuSignal.collectAsState().value // Collect signal info
+    val gpsCoordinates = viewModel.gpsCoordinates.collectAsState().value
+
+
     val onu = viewModel.getOnuById(routerId)
+
+    val uniqueId = onu?.uniqueExternalId
+    LaunchedEffect(uniqueId) {
+        if (uniqueId != null) {
+            viewModel.fetchOnuFullStatus(uniqueId)
+            viewModel.fetchOnuSignal(uniqueId)
+            viewModel.fetchGpsCoordinates()
+        }
+    }
+
     val context = LocalContext.current
 
     if (onu == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("ONU not found", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Looking for SN: $routerId",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "State: ${when(networkState) {
+                        is NetworkState.Loading -> "Loading..."
+                        is NetworkState.Success -> "Loaded ${(networkState as NetworkState.Success).onus.size} ONUs"
+                        is NetworkState.Error -> "Error: ${(networkState as NetworkState.Error).message}"
+                    }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(onClick = onBackClick) {
                     Text("Go Back")
@@ -77,8 +111,31 @@ fun RouterDetailsScreen(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
+            Card(
+                modifier = Modifier.padding(vertical = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = when {
+                        onu.status.contains("online", ignoreCase = true) -> Color(0xFF2E7D32).copy(alpha = 0.1f)
+                        onu.status.contains("offline", ignoreCase = true) -> NosteqRed.copy(alpha = 0.1f)
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                )
+            ) {
+                Text(
+                    text = "Status: ${onu.status}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = when {
+                        onu.status.contains("online", ignoreCase = true) -> Color(0xFF2E7D32)
+                        onu.status.contains("offline", ignoreCase = true) -> NosteqRed
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "IP: ${onu.ipAddress ?: "N/A"}",
+                text = "IP: ${liveStatus?.ipAddress ?: onu.ipAddress ?: "N/A"}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -92,41 +149,142 @@ fun RouterDetailsScreen(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (onu.phoneNumber != null) {
+                Text(
+                    text = "Phone: ${onu.phoneNumber}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = "Last Seen: ${liveStatus?.lastUpTime ?: onu.lastSeen}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // Optical Telemetry
             Text(
-                text = "Optical Telemetry",
+                text = "Optical Telemetry (Live)", // Updated title
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+
+            if (signalInfo != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = when (signalInfo.signalQuality.lowercase()) {
+                            "very good" -> Color(0xFF2E7D32).copy(alpha = 0.1f)
+                            "warning" -> Color(0xFFF57C00).copy(alpha = 0.1f)
+                            "critical" -> NosteqRed.copy(alpha = 0.1f)
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Signal Quality: ${signalInfo.signalQuality}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = when (signalInfo.signalQuality.lowercase()) {
+                                    "very good" -> Color(0xFF2E7D32)
+                                    "warning" -> Color(0xFFF57C00)
+                                    "critical" -> NosteqRed
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                            Text(
+                                text = signalInfo.signalValue,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Row(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TelemetryItem(
-                        label = "Rx Power",
-                        value = if (onu.rxPower != null) "${onu.rxPower} dBm" else "N/A",
-                        isCritical = (onu.rxPower ?: -100.0) < -27.0
-                    )
-                    TelemetryItem(
-                        label = "Tx Power",
-                        value = if (onu.txPower != null) "${onu.txPower} dBm" else "N/A",
-                        isCritical = false
-                    )
-                    TelemetryItem(
-                        label = "Distance",
-                        value = if (onu.distance != null) "${onu.distance}m" else "N/A",
-                        isCritical = false
-                    )
+                Column(modifier = Modifier.padding(16.dp)) {
+                    if (signalInfo?.signal1490 != null || signalInfo?.signal1310 != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            if (signalInfo.signal1490 != null) {
+                                TelemetryItem(
+                                    label = "1490nm (Rx)",
+                                    value = signalInfo.signal1490,
+                                    isCritical = false
+                                )
+                            }
+                            if (signalInfo.signal1310 != null) {
+                                TelemetryItem(
+                                    label = "1310nm (Tx)",
+                                    value = signalInfo.signal1310,
+                                    isCritical = false
+                                )
+                            }
+                            val dist = liveStatus?.distance ?: onu.distance
+                            TelemetryItem(
+                                label = "Distance",
+                                value = if (dist != null) "${dist}m" else "Loading...",
+                                isCritical = false
+                            )
+                        }
+                    } else {
+                        // Fallback to original display
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            val rx = liveStatus?.rxPower ?: onu.rxPower
+                            val tx = liveStatus?.txPower ?: onu.txPower
+                            val dist = liveStatus?.distance ?: onu.distance
+
+                            TelemetryItem(
+                                label = "Rx Power",
+                                value = if (rx != null) "$rx dBm" else "Loading...",
+                                isCritical = (rx ?: -100.0) < -27.0
+                            )
+                            TelemetryItem(
+                                label = "Tx Power",
+                                value = if (tx != null) "$tx dBm" else "Loading...",
+                                isCritical = false
+                            )
+                            TelemetryItem(
+                                label = "Distance",
+                                value = if (dist != null) "${dist}m" else "Loading...",
+                                isCritical = false
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (liveStatus?.runState != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Live Status: ${liveStatus.runState}", fontWeight = FontWeight.Bold)
+                        if (liveStatus.lastDownCause != null) {
+                            Text("Last Down Cause: ${liveStatus.lastDownCause}")
+                        }
+                    }
                 }
             }
 
@@ -151,15 +309,32 @@ fun RouterDetailsScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
+                    if (onu.phoneNumber != null) {
+                        Text(
+                            text = "Customer Phone: ${onu.phoneNumber}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
-                        onClick = { Toast.makeText(context, "Calling Customer...", Toast.LENGTH_SHORT).show() },
+                        onClick = {
+                            if (onu.phoneNumber != null) {
+                                val intent = Intent(Intent.ACTION_DIAL).apply {
+                                    data = Uri.parse("tel:${onu.phoneNumber}")
+                                }
+                                context.startActivity(intent)
+                            } else {
+                                Toast.makeText(context, "No phone number available", Toast.LENGTH_SHORT).show()
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                     ) {
                         Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Call Customer")
+                        Text(if (onu.phoneNumber != null) "Call ${onu.phoneNumber}" else "Call Customer")
                     }
                 }
             }
@@ -177,9 +352,16 @@ fun RouterDetailsScreen(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        // Using zone as address placeholder since address isn't in OnuDetail
-                        val address = onu.address ?: onu.zoneName ?: ""
-                        val gmmIntentUri = Uri.parse("geo:0,0?q=${Uri.encode(address)}")
+                        val gps = uniqueId?.let { gpsCoordinates[it] }
+                        val uriString = if (gps != null) {
+                            "geo:${gps.first},${gps.second}?q=${gps.first},${gps.second}(${Uri.encode(onu.name)})"
+                        } else {
+                            // Fallback using zone as address placeholder since address isn't in OnuDetail
+                            val address = onu.address ?: onu.zoneName ?: ""
+                            "geo:0,0?q=${Uri.encode(address)}"
+                        }
+
+                        val gmmIntentUri = Uri.parse(uriString)
                         val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
                         mapIntent.setPackage("com.google.android.apps.maps")
                         try {
@@ -192,7 +374,7 @@ fun RouterDetailsScreen(
                 ) {
                     Icon(Icons.Default.Map, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Navigate")
+                    Text(if (uniqueId != null && gpsCoordinates.containsKey(uniqueId)) "Navigate (GPS)" else "Navigate")
                 }
 
                 OutlinedButton(

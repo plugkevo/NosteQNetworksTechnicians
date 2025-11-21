@@ -6,11 +6,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kevann.nosteqTech.ApiConfig
 import com.kevann.nosteqTech.data.api.OnuDetail
+import com.kevann.nosteqTech.data.api.OnuFullStatus
+import com.kevann.nosteqTech.data.api.OnuSignalInfo
 import com.kevann.nosteqTech.data.api.SmartOltApiService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
+
 
 sealed class NetworkState {
     object Loading : NetworkState()
@@ -22,9 +27,21 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     private val _networkState = MutableStateFlow<NetworkState>(NetworkState.Loading)
     val networkState: StateFlow<NetworkState> = _networkState
 
+    private val _selectedOnuStatus = MutableStateFlow<OnuFullStatus?>(null)
+    val selectedOnuStatus: StateFlow<OnuFullStatus?> = _selectedOnuStatus
+
+    private val _selectedOnuSignal = MutableStateFlow<OnuSignalInfo?>(null)
+    val selectedOnuSignal: StateFlow<OnuSignalInfo?> = _selectedOnuSignal
+
+    private val _gpsCoordinates = MutableStateFlow<Map<String, Pair<Double, Double>>>(emptyMap())
+    val gpsCoordinates: StateFlow<Map<String, Pair<Double, Double>>> = _gpsCoordinates
+
     private val apiService = SmartOltApiService(ApiConfig.SUBDOMAIN, ApiConfig.API_KEY)
     private val cacheFile = File(application.cacheDir, "onus_cache.json")
     private val CACHE_EXPIRATION_MS = 60 * 60 * 1000 // 1 hour
+
+    private val gpsCacheFile = File(application.cacheDir, "gps_cache.json")
+    private val GPS_CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000 // 24 hours
 
     fun fetchAllOnus(
         oltId: Int? = null,
@@ -75,10 +92,90 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun fetchGpsCoordinates(forceRefresh: Boolean = false) {
+        viewModelScope.launch {
+            if (!forceRefresh && gpsCacheFile.exists() && (System.currentTimeMillis() - gpsCacheFile.lastModified() < GPS_CACHE_EXPIRATION_MS)) {
+                try {
+                    val cachedJson = gpsCacheFile.readText()
+                    val jsonResponse = JSONObject(cachedJson)
+                    if (jsonResponse.optBoolean("status")) {
+                        val onusArray = jsonResponse.optJSONArray("onus") ?: JSONArray()
+                        val gpsMap = mutableMapOf<String, Pair<Double, Double>>()
+                        for (i in 0 until onusArray.length()) {
+                            val item = onusArray.getJSONObject(i)
+                            val lat = item.optDouble("latitude")
+                            val long = item.optDouble("longitude")
+                            val id = item.optString("unique_external_id")
+                            if (!lat.isNaN() && !long.isNaN() && id.isNotEmpty()) {
+                                gpsMap[id] = Pair(lat, long)
+                            }
+                        }
+                        _gpsCoordinates.value = gpsMap
+                        return@launch
+                    }
+                } catch (e: Exception) {
+                    // Ignore cache error
+                }
+            }
+
+            val response = apiService.getAllOnusGpsCoordinates()
+            if (response.status && response.onus != null) {
+                // Update state
+                _gpsCoordinates.value = response.onus.associate { it.uniqueExternalId to Pair(it.latitude, it.longitude) }
+
+                // Save to cache (reconstruct simple JSON)
+                try {
+                    val jsonRoot = JSONObject()
+                    jsonRoot.put("status", true)
+                    val jsonArray = JSONArray()
+                    response.onus.forEach { gps ->
+                        val item = JSONObject()
+                        item.put("unique_external_id", gps.uniqueExternalId)
+                        item.put("latitude", gps.latitude)
+                        item.put("longitude", gps.longitude)
+                        jsonArray.put(item)
+                    }
+                    jsonRoot.put("onus", jsonArray)
+                    gpsCacheFile.writeText(jsonRoot.toString())
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    fun fetchOnuFullStatus(uniqueExternalId: String) {
+        viewModelScope.launch {
+            _selectedOnuStatus.value = null // Reset previous status
+            val status = apiService.getOnuFullStatusInfo(uniqueExternalId)
+            _selectedOnuStatus.value = status
+        }
+    }
+
+    fun fetchOnuSignal(uniqueExternalId: String) {
+        viewModelScope.launch {
+            _selectedOnuSignal.value = null // Reset previous signal
+            val signal = apiService.getOnuSignal(uniqueExternalId)
+            _selectedOnuSignal.value = signal
+        }
+    }
+
     fun getOnuById(sn: String): OnuDetail? {
         val currentState = _networkState.value
+        println("[v0] getOnuById - Looking for SN: $sn")
+        println("[v0] getOnuById - Current state: $currentState")
+
         return if (currentState is NetworkState.Success) {
-            currentState.onus.find { it.sn == sn }
-        } else null
+            println("[v0] getOnuById - Available ONUs count: ${currentState.onus.size}")
+            currentState.onus.forEachIndexed { index, onu ->
+                println("[v0] getOnuById - ONU[$index]: sn=${onu.sn}, name=${onu.name}")
+            }
+            val found = currentState.onus.find { it.sn == sn }
+            println("[v0] getOnuById - Found: ${found != null}")
+            found
+        } else {
+            println("[v0] getOnuById - State is not Success, returning null")
+            null
+        }
     }
 }

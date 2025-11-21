@@ -105,7 +105,8 @@ fun NosteqApp() {
                 NetworkDashboardScreen(
                     onRouterClick = { routerId ->
                         navController.navigate("details/$routerId")
-                    }
+                    },
+                    viewModel = networkViewModel
                 )
             }
             composable("map") { MapScreen() }
@@ -122,7 +123,8 @@ fun NosteqApp() {
                 val routerId = backStackEntry.arguments?.getString("routerId") ?: return@composable
                 RouterDetailsScreen(
                     routerId = routerId,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    viewModel = networkViewModel
                 )
             }
         }

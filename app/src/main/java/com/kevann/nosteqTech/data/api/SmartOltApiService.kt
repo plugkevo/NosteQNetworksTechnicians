@@ -50,6 +50,8 @@ data class OnuDetail(
     val administrativeStatus: String?,
     val servicePorts: List<ServicePort>?,
 
+    val phoneNumber: String?,
+
     // UI Helper fields (mapped manually or from optional JSON fields)
     val status: String = "Unknown", // Mapped from status or administrative_status
     val rxPower: Double? = null,
@@ -59,11 +61,209 @@ data class OnuDetail(
     val model: String? = null
 )
 
+data class OnuFullStatus(
+    val rawText: String,
+    val rxPower: Double? = null,
+    val txPower: Double? = null,
+    val distance: Int? = null,
+    val runState: String? = null,
+    val lastDownCause: String? = null,
+    val lastUpTime: String? = null,
+    val ipAddress: String? = null // Added IP address field
+)
+data class OnuGpsCoordinates(
+    val uniqueExternalId: String,
+    val latitude: Double,
+    val longitude: Double
+)
+
+data class OnuGpsResponse(
+    val status: Boolean,
+    val onus: List<OnuGpsCoordinates>? = null,
+    val error: String? = null
+)
+data class OnuSignalInfo(
+    val signalQuality: String, // "Critical", "Warning", "Very good"
+    val signalValue: String, // Combined value like "-10.39 dBm / -10.74 dBm"
+    val signal1310: String?, // 1310nm wavelength
+    val signal1490: String? // 1490nm wavelength
+)
+
 class SmartOltApiService(
     private val subdomain: String,
     private val apiKey: String
 ) {
     private val baseUrl = "https://$subdomain.smartolt.com/api"
+
+    suspend fun getOnuSignal(uniqueExternalId: String): OnuSignalInfo? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$baseUrl/onu/get_onu_signal/$uniqueExternalId")
+            val connection = url.openConnection() as HttpURLConnection
+
+            connection.apply {
+                requestMethod = "GET"
+                setRequestProperty("X-Token", apiKey)
+                setRequestProperty("Content-Type", "application/json")
+                connectTimeout = 30000
+                readTimeout = 30000
+            }
+
+            val responseCode = connection.responseCode
+            val inputStream = if (responseCode == HttpURLConnection.HTTP_OK) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+
+            val responseString = inputStream.bufferedReader().use { it.readText() }
+            val jsonResponse = JSONObject(responseString)
+
+            if (jsonResponse.optBoolean("status")) {
+                OnuSignalInfo(
+                    signalQuality = jsonResponse.optString("onu_signal", "Unknown"),
+                    signalValue = jsonResponse.optString("onu_signal_value", "N/A"),
+                    signal1310 = jsonResponse.optString("onu_signal_1310").ifEmpty { null },
+                    signal1490 = jsonResponse.optString("onu_signal_1490").ifEmpty { null }
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+    suspend fun getAllOnusGpsCoordinates(
+        oltId: Int? = null,
+        board: Int? = null,
+        port: Int? = null,
+        zone: String? = null
+    ): OnuGpsResponse = withContext(Dispatchers.IO) {
+        try {
+            val urlBuilder = StringBuilder("$baseUrl/onu/get_all_onus_gps_coordinates")
+            val params = mutableListOf<String>()
+
+            oltId?.let { params.add("olt_id=$it") }
+            board?.let { params.add("board=$it") }
+            port?.let { params.add("port=$it") }
+            zone?.let { params.add("zone=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+
+            if (params.isNotEmpty()) {
+                urlBuilder.append("?${params.joinToString("&")}")
+            }
+
+            val url = URL(urlBuilder.toString())
+            val connection = url.openConnection() as HttpURLConnection
+
+            connection.apply {
+                requestMethod = "GET"
+                setRequestProperty("X-Token", apiKey)
+                setRequestProperty("Content-Type", "application/json")
+                connectTimeout = 30000
+                readTimeout = 30000
+            }
+
+            val responseCode = connection.responseCode
+            val inputStream = if (responseCode == HttpURLConnection.HTTP_OK) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+
+            val responseString = inputStream.bufferedReader().use { it.readText() }
+            val jsonResponse = JSONObject(responseString)
+
+            if (jsonResponse.optBoolean("status")) {
+                val onusArray = jsonResponse.optJSONArray("onus") ?: JSONArray()
+                val gpsList = mutableListOf<OnuGpsCoordinates>()
+
+                for (i in 0 until onusArray.length()) {
+                    val item = onusArray.getJSONObject(i)
+                    val lat = item.optDouble("latitude")
+                    val long = item.optDouble("longitude")
+                    val id = item.optString("unique_external_id")
+
+                    if (!lat.isNaN() && !long.isNaN() && id.isNotEmpty()) {
+                        gpsList.add(OnuGpsCoordinates(id, lat, long))
+                    }
+                }
+                OnuGpsResponse(status = true, onus = gpsList)
+            } else {
+                OnuGpsResponse(status = false, error = "Failed to fetch GPS coordinates")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            OnuGpsResponse(status = false, error = e.message ?: "Network error")
+        }
+    }
+    suspend fun getOnuFullStatusInfo(uniqueExternalId: String): OnuFullStatus? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$baseUrl/onu/get_onu_full_status_info/$uniqueExternalId")
+            val connection = url.openConnection() as HttpURLConnection
+
+            connection.apply {
+                requestMethod = "POST" // Documentation says POST
+                setRequestProperty("X-Token", apiKey)
+                setRequestProperty("Content-Type", "application/json")
+                connectTimeout = 30000
+                readTimeout = 30000
+                doOutput = true // Triggers POST
+            }
+
+            val responseCode = connection.responseCode
+            val inputStream = if (responseCode == HttpURLConnection.HTTP_OK) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+
+            val responseString = inputStream.bufferedReader().use { it.readText() }
+            val jsonResponse = JSONObject(responseString)
+
+            if (jsonResponse.optBoolean("status")) {
+                val fullInfo = jsonResponse.optString("full_status_info", "")
+                parseFullStatusInfo(fullInfo)
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun parseFullStatusInfo(info: String): OnuFullStatus {
+        // Helper regex to find values after ":"
+        fun getValue(key: String): String? {
+            val regex = Regex("$key\\s*:\\s*(.+)", RegexOption.IGNORE_CASE) // Added IGNORE_CASE for better matching
+            return regex.find(info)?.groupValues?.get(1)?.trim()
+        }
+
+        val rxStr = getValue("Rx optical power")
+        val txStr = getValue("Tx optical power")
+        val distStr = getValue("ONT distance")
+
+        // Clean numeric strings (remove units if any, though regex handles most)
+        val rx = rxStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
+        val tx = txStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
+        val dist = distStr?.replace(Regex("[^0-9]"), "")?.toIntOrNull()
+
+        val ip = getValue("IP address")
+            ?: getValue("WAN IP")
+            ?: getValue("IPv4 address")
+            ?: getValue("IP")
+
+        return OnuFullStatus(
+            rawText = info,
+            rxPower = rx,
+            txPower = tx,
+            distance = dist,
+            runState = getValue("Run state"),
+            lastDownCause = getValue("Last down cause"),
+            lastUpTime = getValue("Last up time"),
+            ipAddress = ip // Set the parsed IP
+        )
+    }
 
     suspend fun fetchRawOnusJson(
         oltId: Int? = null,
@@ -142,6 +342,24 @@ class SmartOltApiService(
                 val finalStatus = if (rawStatus.isNotEmpty()) rawStatus else adminStatus.ifEmpty { "Unknown" }
 
                 // Robust key checking for other fields
+                val ipAddr = onuJson.optString("ip_address").ifEmpty {
+                    onuJson.optString("ip").ifEmpty {
+                        onuJson.optString("ipv4").ifEmpty {
+                            onuJson.optString("wan_ip").ifEmpty { null }
+                        }
+                    }
+                }
+
+                val phone = onuJson.optString("phone_number").ifEmpty {
+                    onuJson.optString("phone").ifEmpty {
+                        onuJson.optString("customer_phone").ifEmpty {
+                            onuJson.optString("mobile").ifEmpty {
+                                onuJson.optString("contact_number").ifEmpty { null }
+                            }
+                        }
+                    }
+                }
+
                 onus.add(
                     OnuDetail(
                         uniqueExternalId = onuJson.optString("unique_external_id").ifEmpty { onuJson.optString("external_id") }.ifEmpty { null },
@@ -160,7 +378,7 @@ class SmartOltApiService(
                         odbName = onuJson.optString("odb_name").ifEmpty { onuJson.optString("odb", null) },
                         mode = onuJson.optString("mode").ifEmpty { null },
                         wanMode = onuJson.optString("wan_mode").ifEmpty { null },
-                        ipAddress = onuJson.optString("ip_address").ifEmpty { null },
+                        ipAddress = ipAddr,
                         subnetMask = onuJson.optString("subnet_mask").ifEmpty { null },
                         defaultGateway = onuJson.optString("default_gateway").ifEmpty { null },
                         dns1 = onuJson.optString("dns1").ifEmpty { null },
@@ -170,12 +388,17 @@ class SmartOltApiService(
                         catv = onuJson.optString("catv").ifEmpty { null },
                         administrativeStatus = adminStatus,
                         servicePorts = servicePortsList,
+                        phoneNumber = phone,
 
                         // UI Fields
                         status = finalStatus,
                         rxPower = onuJson.optDouble("rx_power").takeIf { !it.isNaN() },
                         txPower = onuJson.optDouble("tx_power").takeIf { !it.isNaN() },
-                        lastSeen = onuJson.optString("last_seen", "Unknown"),
+                        lastSeen = onuJson.optString("last_seen").ifEmpty {
+                            onuJson.optString("last_online").ifEmpty {
+                                onuJson.optString("last_connected", "Unknown")
+                            }
+                        },
                         distance = onuJson.optInt("distance").takeIf { it > 0 },
                         model = onuJson.optString("model").ifEmpty { onuJson.optString("onu_type_name", null) }
                     )
