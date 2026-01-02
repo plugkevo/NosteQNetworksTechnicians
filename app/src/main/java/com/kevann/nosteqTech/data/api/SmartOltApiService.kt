@@ -1,13 +1,13 @@
 package com.kevann.nosteqTech.data.api
 
-
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLEncoder
+import android.util.Log
+
 
 
 data class OnuDetailsResponse(
@@ -69,8 +69,16 @@ data class OnuFullStatus(
     val runState: String? = null,
     val lastDownCause: String? = null,
     val lastUpTime: String? = null,
-    val ipAddress: String? = null // Added IP address field
+    val ipAddress: String? = null
 )
+
+data class OnuSignalInfo(
+    val signalQuality: String, // "Critical", "Warning", "Very good"
+    val signalValue: String, // Combined value like "-10.39 dBm / -10.74 dBm"
+    val signal1310: String?, // 1310nm wavelength
+    val signal1490: String? // 1490nm wavelength
+)
+
 data class OnuGpsCoordinates(
     val uniqueExternalId: String,
     val latitude: Double,
@@ -82,11 +90,24 @@ data class OnuGpsResponse(
     val onus: List<OnuGpsCoordinates>? = null,
     val error: String? = null
 )
-data class OnuSignalInfo(
-    val signalQuality: String, // "Critical", "Warning", "Very good"
-    val signalValue: String, // Combined value like "-10.39 dBm / -10.74 dBm"
-    val signal1310: String?, // 1310nm wavelength
-    val signal1490: String? // 1490nm wavelength
+
+data class OnuSpeedProfile(
+    val uploadProfileName: String?,
+    val downloadProfileName: String?
+)
+
+data class OnuSpeedProfileResponse(
+    val status: Boolean,
+    val uploadSpeedProfileName: String? = null,
+    val downloadSpeedProfileName: String? = null,
+    val error: String? = null
+)
+
+data class SpeedTestResult(
+    val downloadSpeedMbps: Double?,
+    val uploadSpeedMbps: Double?,
+    val isLoading: Boolean = false,
+    val error: String? = null
 )
 
 class SmartOltApiService(
@@ -133,6 +154,7 @@ class SmartOltApiService(
             null
         }
     }
+
     suspend fun getAllOnusGpsCoordinates(
         oltId: Int? = null,
         board: Int? = null,
@@ -196,6 +218,7 @@ class SmartOltApiService(
             OnuGpsResponse(status = false, error = e.message ?: "Network error")
         }
     }
+
     suspend fun getOnuFullStatusInfo(uniqueExternalId: String): OnuFullStatus? = withContext(Dispatchers.IO) {
         try {
             val url = URL("$baseUrl/onu/get_onu_full_status_info/$uniqueExternalId")
@@ -426,4 +449,111 @@ class SmartOltApiService(
             OnuDetailsResponse(status = false, error = e.message ?: "Network error")
         }
     }
+
+    suspend fun getOnuSpeedProfiles(uniqueExternalId: String): OnuSpeedProfile? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$baseUrl/onu/get_onu_speed_profiles/$uniqueExternalId")
+            val connection = url.openConnection() as HttpURLConnection
+
+            connection.apply {
+                requestMethod = "GET"
+                setRequestProperty("X-Token", apiKey)
+                setRequestProperty("Content-Type", "application/json")
+                connectTimeout = 30000
+                readTimeout = 30000
+            }
+
+            val responseCode = connection.responseCode
+            val inputStream = if (responseCode == HttpURLConnection.HTTP_OK) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+
+            val responseString = inputStream.bufferedReader().use { it.readText() }
+            val jsonResponse = JSONObject(responseString)
+
+            if (jsonResponse.optBoolean("status")) {
+                OnuSpeedProfile(
+                    uploadProfileName = jsonResponse.optString("upload_speed_profile_name").ifEmpty { null },
+                    downloadProfileName = jsonResponse.optString("download_speed_profile_name").ifEmpty { null }
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    suspend fun runSpeedTest(): SpeedTestResult = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val testUrls = listOf(
+                "https://speed.cloudflare.com/__down?bytes=10000000", // Cloudflare - 10MB HTTPS
+                "https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js", // 10MB alternative
+                "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png" // Google logo fallback
+            )
+
+            var downloadSpeedMbps: Double? = null
+
+            for (testUrl in testUrls) {
+                try {
+                    val startTime = System.currentTimeMillis()
+                    val url = URL(testUrl)
+                    val connection = url.openConnection() as HttpURLConnection
+                    connection.apply {
+                        requestMethod = "GET"
+                        connectTimeout = 15000
+                        readTimeout = 60000
+                    }
+
+                    if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+                        val fileSize = connection.contentLength.toLong() // bytes
+
+                        // Download and measure speed
+                        val inputStream = connection.inputStream
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        var totalBytes = 0L
+
+                        while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                            totalBytes += bytesRead
+                        }
+                        inputStream.close()
+
+                        val endTime = System.currentTimeMillis()
+                        val durationSeconds = (endTime - startTime) / 1000.0
+
+                        if (durationSeconds > 0) {
+                            val bytesPerSecond = totalBytes / durationSeconds
+                            downloadSpeedMbps = (bytesPerSecond * 8) / 1_000_000 // Convert to Mbps
+                            Log.d("[v0] Speed Test", "Download Speed: $downloadSpeedMbps Mbps")
+                            break // Success, exit loop
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("[v0] Speed Test", "Failed with URL: $testUrl - ${e.message}")
+                    // Try next URL
+                    continue
+                }
+            }
+
+            SpeedTestResult(
+                downloadSpeedMbps = downloadSpeedMbps,
+                uploadSpeedMbps = null, // Upload speed requires server cooperation
+                isLoading = false,
+                error = if (downloadSpeedMbps == null) "Unable to measure speed - check network connectivity" else null
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            SpeedTestResult(
+                downloadSpeedMbps = null,
+                uploadSpeedMbps = null,
+                isLoading = false,
+                error = "Speed test failed: ${e.message}"
+            )
+        }
+    }
 }
+

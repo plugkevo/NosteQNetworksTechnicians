@@ -1,9 +1,8 @@
 package com.kevann.nosteqTech
 
-
-
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -16,7 +15,7 @@ import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.LaunchedEffect // Import LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,11 +25,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kevann.nosteqTech.data.api.SpeedTestResult
 import com.kevann.nosteqTech.ui.theme.NosteqRed
 import com.kevann.nosteqTech.ui.theme.NosteqTheme
 import com.kevann.nosteqTech.viewmodel.NetworkState
 import com.kevann.nosteqTech.viewmodel.NetworkViewModel
-
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,20 +43,35 @@ fun RouterDetailsScreen(
     val liveStatus = viewModel.selectedOnuStatus.collectAsState().value
     val signalInfo = viewModel.selectedOnuSignal.collectAsState().value // Collect signal info
     val gpsCoordinates = viewModel.gpsCoordinates.collectAsState().value
-
+    val speedProfile = viewModel.selectedOnuSpeedProfile.collectAsState().value
+    val speedTestResult = viewModel.speedTestResult.collectAsState(initial = null).value
 
     val onu = viewModel.getOnuById(routerId)
 
     val uniqueId = onu?.uniqueExternalId
-    LaunchedEffect(uniqueId) {
-        if (uniqueId != null) {
+
+    LaunchedEffect(routerId) {
+        Log.d("[v0] Router Details", "routerId changed to: $routerId - Clearing speed test result")
+        viewModel.clearSpeedTestResult()
+    }
+
+    if (uniqueId != null) {
+        LaunchedEffect(uniqueId) {
             viewModel.fetchOnuFullStatus(uniqueId)
             viewModel.fetchOnuSignal(uniqueId)
+            viewModel.fetchOnuSpeedProfile(uniqueId)  // Fetch speed profile
             viewModel.fetchGpsCoordinates()
         }
     }
 
     val context = LocalContext.current
+
+    LaunchedEffect(gpsCoordinates) {
+        if (uniqueId != null) {
+            val gps = gpsCoordinates[uniqueId]
+            Log.d("[v0]", "GPS Coordinates for $uniqueId: Lat=${gps?.first}, Long=${gps?.second}")
+        }
+    }
 
     if (onu == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -353,21 +367,21 @@ fun RouterDetailsScreen(
                 Button(
                     onClick = {
                         val gps = uniqueId?.let { gpsCoordinates[it] }
-                        val uriString = if (gps != null) {
-                            "geo:${gps.first},${gps.second}?q=${gps.first},${gps.second}(${Uri.encode(onu.name)})"
-                        } else {
-                            // Fallback using zone as address placeholder since address isn't in OnuDetail
-                            val address = onu.address ?: onu.zoneName ?: ""
-                            "geo:0,0?q=${Uri.encode(address)}"
-                        }
 
-                        val gmmIntentUri = Uri.parse(uriString)
-                        val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
-                        mapIntent.setPackage("com.google.android.apps.maps")
-                        try {
-                            context.startActivity(mapIntent)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Google Maps not installed", Toast.LENGTH_SHORT).show()
+                        if (gps != null) {
+                            Log.d("[v0]", "Opening Google Maps with GPS: ${gps.first}, ${gps.second}")
+                            val uriString = "geo:${gps.first},${gps.second}?q=${gps.first},${gps.second}(${Uri.encode(onu.name)})"
+                            val gmmIntentUri = Uri.parse(uriString)
+                            val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
+                            mapIntent.setPackage("com.google.android.apps.maps")
+                            try {
+                                context.startActivity(mapIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Google Maps not installed", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Log.d("[v0]", "GPS coordinates not available for $uniqueId")
+                            Toast.makeText(context, "GPS coordinates not available", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.weight(1f)
@@ -378,12 +392,57 @@ fun RouterDetailsScreen(
                 }
 
                 OutlinedButton(
-                    onClick = { Toast.makeText(context, "Pinging ${onu.ipAddress ?: "device"}...", Toast.LENGTH_SHORT).show() },
+                    onClick = {
+                        if (speedTestResult?.isLoading == true) {
+                            Toast.makeText(context, "Speed test in progress...", Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.runSpeedTest()
+                        }
+                    },
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Default.NetworkCheck, contentDescription = null)
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Ping")
+                    Text(
+                        when {
+                            speedTestResult?.isLoading == true -> "Testing..."
+                            speedTestResult?.downloadSpeedMbps != null ->
+                                "Speed: %.1f Mbps".format(speedTestResult.downloadSpeedMbps)
+                            else -> "Speed Test"
+                        }
+                    )
+                }
+            }
+
+            // Display speed test results if available
+            if (speedTestResult?.downloadSpeedMbps != null || speedTestResult?.error != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (speedTestResult.error != null)
+                            NosteqRed.copy(alpha = 0.1f)
+                        else
+                            Color(0xFF2E7D32).copy(alpha = 0.1f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        if (speedTestResult.downloadSpeedMbps != null) {
+                            Text(
+                                text = "Download Speed: %.2f Mbps".format(speedTestResult.downloadSpeedMbps),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2E7D32)
+                            )
+                        }
+                        if (speedTestResult.error != null) {
+                            Text(
+                                text = "Error: ${speedTestResult.error}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = NosteqRed
+                            )
+                        }
+                    }
                 }
             }
 

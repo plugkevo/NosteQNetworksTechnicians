@@ -1,20 +1,23 @@
 package com.kevann.nosteqTech.viewmodel
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kevann.nosteqTech.ApiConfig
 import com.kevann.nosteqTech.data.api.OnuDetail
 import com.kevann.nosteqTech.data.api.OnuFullStatus
-import com.kevann.nosteqTech.data.api.OnuSignalInfo
+import com.kevann.nosteqTech.data.api.OnuSignalInfo // Import new class
+import com.kevann.nosteqTech.data.api.OnuSpeedProfile // Import new class
 import com.kevann.nosteqTech.data.api.SmartOltApiService
+import com.kevann.nosteqTech.data.api.SpeedTestResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
+import org.json.JSONArray // Import JSONArray
+import org.json.JSONObject // Import JSONObject
 import java.io.File
+
 
 
 sealed class NetworkState {
@@ -33,8 +36,14 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedOnuSignal = MutableStateFlow<OnuSignalInfo?>(null)
     val selectedOnuSignal: StateFlow<OnuSignalInfo?> = _selectedOnuSignal
 
+    private val _selectedOnuSpeedProfile = MutableStateFlow<OnuSpeedProfile?>(null)
+    val selectedOnuSpeedProfile: StateFlow<OnuSpeedProfile?> = _selectedOnuSpeedProfile
+
     private val _gpsCoordinates = MutableStateFlow<Map<String, Pair<Double, Double>>>(emptyMap())
     val gpsCoordinates: StateFlow<Map<String, Pair<Double, Double>>> = _gpsCoordinates
+
+    private val _speedTestResult = MutableStateFlow<SpeedTestResult?>(null)
+    val speedTestResult: StateFlow<SpeedTestResult?> = _speedTestResult
 
     private val apiService = SmartOltApiService(ApiConfig.SUBDOMAIN, ApiConfig.API_KEY)
     private val cacheFile = File(application.cacheDir, "onus_cache.json")
@@ -160,6 +169,19 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun fetchOnuSpeedProfile(uniqueExternalId: String) {
+        viewModelScope.launch {
+            _selectedOnuSpeedProfile.value = null // Reset previous profile
+            val speedProfile = apiService.getOnuSpeedProfiles(uniqueExternalId)
+            _selectedOnuSpeedProfile.value = speedProfile
+            if (speedProfile != null) {
+                Log.d("[v0]", "Speed Profile for $uniqueExternalId - Download: ${speedProfile.downloadProfileName}, Upload: ${speedProfile.uploadProfileName}")
+            } else {
+                Log.d("[v0]", "Speed Profile not available for $uniqueExternalId")
+            }
+        }
+    }
+
     fun getOnuById(sn: String): OnuDetail? {
         val currentState = _networkState.value
         println("[v0] getOnuById - Looking for SN: $sn")
@@ -177,5 +199,28 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
             println("[v0] getOnuById - State is not Success, returning null")
             null
         }
+    }
+
+    fun runSpeedTest() {
+        viewModelScope.launch {
+            _speedTestResult.value = SpeedTestResult(
+                downloadSpeedMbps = null,
+                uploadSpeedMbps = null,
+                isLoading = true
+            )
+
+            val result = apiService.runSpeedTest()
+            _speedTestResult.value = result
+
+            Log.d("[v0] Speed Test", "Download Speed: ${result.downloadSpeedMbps?.let { "%.2f Mbps".format(it) } ?: "N/A"}")
+            if (result.error != null) {
+                Log.e("[v0] Speed Test", "Error: ${result.error}")
+            }
+        }
+    }
+
+    fun clearSpeedTestResult() {
+        _speedTestResult.value = null
+        Log.d("[v0] Speed Test", "Speed test result cleared")
     }
 }
