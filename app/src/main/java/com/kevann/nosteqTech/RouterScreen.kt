@@ -63,6 +63,59 @@ fun RouterDetailsScreen(
             viewModel.fetchGpsCoordinates()
         }
     }
+    if (onu != null && uniqueId != null) {
+        try {
+            Log.d("[v0] Router Details", "=== ROUTER DETAILS ===")
+            Log.d("[v0] Router Details", "Name: ${onu.name}")
+            Log.d("[v0] Router Details", "Serial Number (SN): ${onu.sn}")
+            Log.d("[v0] Router Details", "Model: ${onu.model ?: "N/A"}")
+            Log.d("[v0] Router Details", "Status: ${onu.administrativeStatus ?: "N/A"}")
+            Log.d("[v0] Router Details", "Phone Number: ${onu.phoneNumber ?: "N/A"}")
+            Log.d("[v0] Router Details", "")
+            Log.d("[v0] Router Details", "--- Network Configuration ---")
+            Log.d("[v0] Router Details", "IP Address: ${onu.ipAddress ?: "N/A"}")
+            Log.d("[v0] Router Details", "Subnet Mask: ${onu.subnetMask ?: "N/A"}")
+            Log.d("[v0] Router Details", "Default Gateway: ${onu.defaultGateway ?: "N/A"}")
+            Log.d("[v0] Router Details", "DNS 1: ${onu.dns1 ?: "N/A"}")
+            Log.d("[v0] Router Details", "DNS 2: ${onu.dns2 ?: "N/A"}")
+            Log.d("[v0] Router Details", "")
+            Log.d("[v0] Router Details", "--- System Configuration ---")
+            Log.d("[v0] Router Details", "Mode: ${onu.mode ?: "N/A"}")
+            Log.d("[v0] Router Details", "WAN Mode: ${onu.wanMode ?: "N/A"}")
+            Log.d("[v0] Router Details", "Username: ${onu.username ?: "N/A"}")
+            Log.d("[v0] Router Details", "Password: ${if (onu.password != null) "***HIDDEN***" else "N/A"}")
+            Log.d("[v0] Router Details", "CATV: ${onu.catv ?: "N/A"}")
+            Log.d("[v0] Router Details", "")
+            Log.d("[v0] Router Details", "--- Signal & Performance ---")
+            Log.d("[v0] Router Details", "RX Power: ${onu.rxPower ?: "N/A"} dBm")
+            Log.d("[v0] Router Details", "TX Power: ${onu.txPower ?: "N/A"} dBm")
+            Log.d("[v0] Router Details", "Last Seen: ${onu.lastSeen ?: "N/A"}")
+            Log.d("[v0] Router Details", "Distance: ${onu.distance?.let { "$it meters" } ?: "N/A"}")
+            Log.d("[v0] Router Details", "")
+            Log.d("[v0] Router Details", "--- Location & Infrastructure ---")
+            Log.d("[v0] Router Details", "Zone Name: ${onu.zoneName ?: "N/A"}")
+            Log.d("[v0] Router Details", "OLT Name: ${onu.oltName ?: "N/A"}")
+            Log.d("[v0] Router Details", "ONU Type: ${onu.onuTypeName ?: "N/A"}")
+            Log.d("[v0] Router Details", "Board: ${onu.board ?: "N/A"}")
+            Log.d("[v0] Router Details", "Port: ${onu.port ?: "N/A"}")
+            Log.d("[v0] Router Details", "Address: ${onu.address ?: "N/A"}")
+            Log.d("[v0] Router Details", "ODB Name: ${onu.odbName ?: "N/A"}")
+            Log.d("[v0] Router Details", "")
+            Log.d("[v0] Router Details", "--- Service Ports ---")
+            if (onu.servicePorts != null && onu.servicePorts.isNotEmpty()) {
+                onu.servicePorts.forEachIndexed { index, port ->
+                    Log.d("[v0] Router Details", "Port ${index + 1}: ID=${port.id}, Name=${port.name}, ")
+                }
+            } else {
+                Log.d("[v0] Router Details", "No service ports configured")
+            }
+            Log.d("[v0] Router Details", "")
+            Log.d("[v0] Router Details", "Unique External ID: ${onu.uniqueExternalId ?: "N/A"}")
+            Log.d("[v0] Router Details", "=== END ROUTER DETAILS ===")
+        } catch (e: Exception) {
+            Log.e("[v0] Router Details", "Error logging router details", e)
+        }
+    }
 
     val context = LocalContext.current
 
@@ -171,7 +224,7 @@ fun RouterDetailsScreen(
                 )
             }
             Text(
-                text = "Last Seen: ${liveStatus?.lastUpTime ?: onu.lastSeen}",
+                text = "Username: ${onu.username ?: "N/A"}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -323,9 +376,9 @@ fun RouterDetailsScreen(
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
-                    if (onu.phoneNumber != null) {
+                    if (onu.username != null) {
                         Text(
-                            text = "Customer Phone: ${onu.phoneNumber}",
+                            text = "Customer Phone: ${onu.username}",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(top = 8.dp)
@@ -334,9 +387,9 @@ fun RouterDetailsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = {
-                            if (onu.phoneNumber != null) {
+                            if (onu.username != null) {
                                 val intent = Intent(Intent.ACTION_DIAL).apply {
-                                    data = Uri.parse("tel:${onu.phoneNumber}")
+                                    data = Uri.parse("tel:${onu.username}")
                                 }
                                 context.startActivity(intent)
                             } else {

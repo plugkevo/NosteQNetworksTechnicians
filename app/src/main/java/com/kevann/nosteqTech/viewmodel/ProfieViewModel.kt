@@ -1,4 +1,4 @@
-package com.kevann.nosteqTech.viewmodel
+package com.kevann.nosteqTech.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,7 +16,8 @@ data class TechnicianProfile(
     val email: String = "",
     val phoneNumber: String = "",
     val serviceArea: String = "",
-    val name: String = ""
+    val name: String = "",
+    val role: String = ""
 )
 
 sealed class ProfileState {
@@ -45,6 +46,9 @@ class ProfileViewModel : ViewModel() {
     private val _onusManagedCount = MutableStateFlow<Int>(0)
     val onusManagedCount: StateFlow<Int> = _onusManagedCount.asStateFlow()
 
+    private val _isDarkMode = MutableStateFlow<Boolean>(false)
+    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+
     fun fetchUserProfile() {
         _profileState.value = ProfileState.Loading
         viewModelScope.launch {
@@ -58,11 +62,15 @@ class ProfileViewModel : ViewModel() {
                             email = doc.getString("email") ?: currentUser.email ?: "",
                             phoneNumber = doc.getString("phoneNumber") ?: "",
                             serviceArea = doc.getString("serviceArea") ?: "",
-                            name = doc.getString("name") ?: ""
+                            name = doc.getString("name") ?: "",
+                            role = doc.getString("role") ?: ""
                         )
                         _profileData.value = profile
                         _profileState.value = ProfileState.Success
                         println("[v0] Profile Fetched: $profile")
+                        val darkMode = doc.getBoolean("darkMode") ?: false
+                        _isDarkMode.value = darkMode
+                        println("[v0] Theme preference loaded: darkMode=$darkMode")
                     } else {
                         _profileState.value = ProfileState.Error("Profile not found")
                     }
@@ -149,15 +157,66 @@ class ProfileViewModel : ViewModel() {
         _updatePasswordState.value = ProfileState.Idle
     }
 
-    fun calculateManagedOnuCount(allOnus: List<OnuDetail>, technicianServiceArea: String) {
-        val count = allOnus.count { onu ->
-            onu.zoneName.equals(technicianServiceArea, ignoreCase = true)
+    fun calculateManagedOnuCountFromCache(technicianServiceArea: String) {
+        // This provides instant count display while waiting for network update
+        val cachedCount = _onusManagedCount.value
+        if (cachedCount > 0) {
+            println("[v0] Profile - Using cached managed ONUs count: $cachedCount")
         }
-        _onusManagedCount.value = count
-        println("[v0] Profile - Managed ONUs count: $count for service area: $technicianServiceArea")
+    }
+
+    fun calculateManagedOnuCount(allOnus: List<OnuDetail>, technicianServiceArea: String) {
+        viewModelScope.launch {
+            val count = allOnus.count { onu ->
+                onu.zoneName.equals(technicianServiceArea, ignoreCase = true)
+            }
+            _onusManagedCount.value = count
+            println("[v0] Profile - Managed ONUs count: $count for service area: $technicianServiceArea")
+        }
+    }
+
+    fun fetchThemePreference() {
+        viewModelScope.launch {
+            try {
+                val currentUser = auth.currentUser
+                if (currentUser != null) {
+                    val doc = db.collection("technicians").document(currentUser.uid).get().await()
+                    if (doc.exists()) {
+                        val darkMode = doc.getBoolean("darkMode") ?: false
+                        _isDarkMode.value = darkMode
+                        println("[v0] Theme preference loaded: darkMode=$darkMode")
+                    }
+                }
+            } catch (e: Exception) {
+                println("[v0] Error fetching theme preference: ${e.message}")
+            }
+        }
+    }
+
+    fun updateThemePreference(isDark: Boolean) {
+        _isDarkMode.value = isDark
+        viewModelScope.launch {
+            try {
+                val currentUser = auth.currentUser
+                if (currentUser != null) {
+                    db.collection("technicians").document(currentUser.uid)
+                        .update("darkMode", isDark).await()
+                    println("[v0] Theme preference saved: darkMode=$isDark")
+                }
+            } catch (e: Exception) {
+                println("[v0] Error saving theme preference: ${e.message}")
+            }
+        }
+    }
+
+    fun getFilteredOnus(allOnus: List<OnuDetail>, userRole: String): List<OnuDetail> {
+        return if (userRole.equals("technician", ignoreCase = true)) {
+            allOnus.filter { onu ->
+                onu.status.equals("LOS", ignoreCase = true) || onu.status.equals("Offline", ignoreCase = true)
+            }
+        } else {
+            // Admin and other roles can see all ONUs
+            allOnus
+        }
     }
 }
-
-data class OnuDetail(
-    val zone: String = ""
-)

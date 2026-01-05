@@ -1,6 +1,5 @@
 package com.kevann.nosteqTech.ui.theme
 
-
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -54,7 +53,7 @@ fun NosteqTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
+            WindowCompat.getInsetsController(window, view)?.isAppearanceLightStatusBars = !darkTheme
         }
     }
 

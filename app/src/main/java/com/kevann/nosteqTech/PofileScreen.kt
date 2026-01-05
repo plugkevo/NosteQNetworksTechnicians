@@ -19,50 +19,60 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kevann.nosteqTech.data.api.OnuDetail
 import com.kevann.nosteqTech.ui.theme.NosteqTheme
+import com.kevann.nosteqTech.ui.viewmodel.ProfileState
+import com.kevann.nosteqTech.ui.viewmodel.ProfileViewModel
 import com.kevann.nosteqTech.viewmodel.NetworkState
 import com.kevann.nosteqTech.viewmodel.NetworkViewModel
-import com.kevann.nosteqTech.viewmodel.ProfileState
-import com.kevann.nosteqTech.viewmodel.ProfileViewModel
+
+import kotlinx.coroutines.delay
 
 @Composable
 fun ProfileScreen(
     onLogout: () -> Unit,
-    viewModel: ProfileViewModel = viewModel(),
+    profileViewModel: ProfileViewModel,  // receive as required parameter instead of default
     networkViewModel: NetworkViewModel = viewModel()  // Add NetworkViewModel to access ONUs
 ) {
-    var isDarkMode by remember { mutableStateOf(false) }
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var editPhoneNumber by remember { mutableStateOf("") }
     var isEditingPhone by remember { mutableStateOf(false) }
     var showPhoneUpdateSuccess by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
-    val profileState by viewModel.profileState.collectAsState()
-    val profileData by viewModel.profileData.collectAsState()
-    val updatePhoneState by viewModel.updatePhoneState.collectAsState()
-    val updatePasswordState by viewModel.updatePasswordState.collectAsState()
-    val onusManagedCount by viewModel.onusManagedCount.collectAsState()  // Collect managed ONUs count
-    val networkState by networkViewModel.networkState.collectAsState()  // Collect network state
+    val profileState by profileViewModel.profileState.collectAsState()
+    val profileData by profileViewModel.profileData.collectAsState()
+    val updatePhoneState by profileViewModel.updatePhoneState.collectAsState()
+    val updatePasswordState by profileViewModel.updatePasswordState.collectAsState()
+    val onusManagedCount by profileViewModel.onusManagedCount.collectAsState()
+    val isDarkMode by profileViewModel.isDarkMode.collectAsState()
 
     // Fetch profile on screen load
     LaunchedEffect(Unit) {
-        viewModel.fetchUserProfile()
-        networkViewModel.fetchAllOnus()
+        profileViewModel.fetchUserProfile()
     }
 
-    // Handle phone update success
-    LaunchedEffect(updatePhoneState) {
-        if (updatePhoneState is ProfileState.Success) {
-            showPhoneUpdateSuccess = true
-            isEditingPhone = false
-            viewModel.resetUpdatePhoneState()
+    var shouldCalculateCount by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(1000)
+        networkViewModel.fetchAllOnus()
+        shouldCalculateCount = true
+    }
+
+    LaunchedEffect(profileData) {
+        if (profileData != null && profileData!!.serviceArea.isNotEmpty()) {
+            profileViewModel.calculateManagedOnuCountFromCache(profileData!!.serviceArea)
+            println("[v0] Profile - Service area loaded: ${profileData!!.serviceArea}")
         }
     }
 
-    LaunchedEffect(profileData, networkState) {
-        if (profileData != null && networkState is NetworkState.Success) {
+    val networkState by networkViewModel.networkState.collectAsState()
+    LaunchedEffect(networkState, shouldCalculateCount) {
+        if (shouldCalculateCount && networkState is NetworkState.Success && profileData != null) {
             val allOnus = (networkState as NetworkState.Success).onus
-            viewModel.calculateManagedOnuCount(allOnus, profileData!!.serviceArea)
+            profileViewModel.calculateManagedOnuCount(allOnus, profileData!!.serviceArea)
+            println("[v0] Profile - Calculating managed ONUs: Total ONUs=${allOnus.size}, Service Area=${profileData!!.serviceArea}, Count=${profileViewModel.onusManagedCount.value}")
         }
     }
 
@@ -100,10 +110,34 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
+
+                Surface(
+                    modifier = Modifier.padding(top = 8.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    color = when {
+                        profileData?.role?.equals("admin", ignoreCase = true) == true -> MaterialTheme.colorScheme.errorContainer
+                        profileData?.role?.equals("technician", ignoreCase = true) == true -> MaterialTheme.colorScheme.tertiaryContainer
+                        else -> MaterialTheme.colorScheme.secondaryContainer
+                    }
+                ) {
+                    Text(
+                        text = profileData?.role?.uppercase() ?: "N/A",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = when {
+                            profileData?.role?.equals("admin", ignoreCase = true) == true -> MaterialTheme.colorScheme.onErrorContainer
+                            profileData?.role?.equals("technician", ignoreCase = true) == true -> MaterialTheme.colorScheme.onTertiaryContainer
+                            else -> MaterialTheme.colorScheme.onSecondaryContainer
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
                 Text(
                     text = "ID: ${profileData?.id ?: "N/A"}",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 12.dp)
                 )
                 Text(
                     text = "Service Area: ${profileData?.serviceArea ?: "N/A"}",
@@ -177,7 +211,7 @@ fun ProfileScreen(
                         IconButton(
                             onClick = {
                                 if (editPhoneNumber.isNotBlank()) {
-                                    viewModel.updatePhoneNumber(editPhoneNumber)
+                                    profileViewModel.updatePhoneNumber(editPhoneNumber)
                                 }
                             },
                             enabled = updatePhoneState !is ProfileState.Loading
@@ -250,7 +284,9 @@ fun ProfileScreen(
             trailingContent = {
                 Switch(
                     checked = isDarkMode,
-                    onCheckedChange = { isDarkMode = it }
+                    onCheckedChange = { newValue ->
+                        profileViewModel.updateThemePreference(newValue)
+                    }
                 )
             }
         )
@@ -294,7 +330,7 @@ fun ProfileScreen(
         ListItem(
             headlineContent = { Text("About") },
             leadingContent = { Icon(Icons.Default.Info, null) },
-            modifier = Modifier.clickable { }
+            modifier = Modifier.clickable { showAboutDialog = true }
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -310,17 +346,33 @@ fun ProfileScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Developed by Kevann Technologies ❤️",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
     }
 
     if (showChangePasswordDialog) {
         ChangePasswordDialog(
             onDismiss = { showChangePasswordDialog = false },
-            viewModel = viewModel,
+            viewModel = profileViewModel,
             updatePasswordState = updatePasswordState,
             onSuccess = {
                 showChangePasswordDialog = false
-                viewModel.resetUpdatePasswordState()
+                profileViewModel.resetUpdatePasswordState()
             }
+        )
+    }
+
+    if (showAboutDialog) {
+        AboutDialog(
+            onDismiss = { showAboutDialog = false }
         )
     }
 
@@ -506,10 +558,78 @@ fun ChangePasswordDialog(
     )
 }
 
+@Composable
+fun AboutDialog(
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("About SmartOlt Technician") },
+        text = {
+            Column {
+                Text(
+                    text = "App Version",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "v1.0.5",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Text(
+                    text = "Build Number",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "2024.01.1005",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Text(
+                    text = "Description",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "NosteQ Networks Technician app is a comprehensive mobile application designed to help field technicians manage and monitor network devices (ONUs) efficiently. View device status, perform diagnostics, and manage customer information all in one place.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                Text(
+                    text = "Developer",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    text = "Kevann Technologies",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
 @Preview(showBackground = true)
 @Composable
 fun ProfileScreenPreview() {
     NosteqTheme {
-        ProfileScreen(onLogout = {})
+        ProfileScreen(
+            onLogout = {},
+            profileViewModel = ProfileViewModel()
+        )
     }
 }

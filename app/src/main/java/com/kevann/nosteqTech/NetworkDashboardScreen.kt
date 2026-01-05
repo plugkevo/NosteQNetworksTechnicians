@@ -26,24 +26,29 @@ import com.kevann.nosteqTech.data.api.OnuDetail
 import com.kevann.nosteqTech.ui.theme.NosteqRed
 import com.kevann.nosteqTech.ui.theme.NosteqTheme
 import com.kevann.nosteqTech.ui.theme.NosteqYellow
+import com.kevann.nosteqTech.ui.viewmodel.ProfileViewModel
 import com.kevann.nosteqTech.viewmodel.NetworkState
 import com.kevann.nosteqTech.viewmodel.NetworkViewModel
-
 
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NetworkDashboardScreen(
     onRouterClick: (String) -> Unit,
-    viewModel: NetworkViewModel = viewModel()
+    viewModel: NetworkViewModel = viewModel(),
+    profileViewModel: ProfileViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf<String?>(null) }
 
     val networkState by viewModel.networkState.collectAsState()
+    val profileData by profileViewModel.profileData.collectAsState()
 
     LaunchedEffect(Unit) {
-        viewModel.fetchAllOnus()
+        if (networkState is NetworkState.Loading) {
+            viewModel.fetchAllOnus()
+            profileViewModel.fetchUserProfile()
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -78,6 +83,7 @@ fun NetworkDashboardScreen(
                 .padding(horizontal = 16.dp)
         ) {}
 
+        // Filter Chips
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -148,10 +154,14 @@ fun NetworkDashboardScreen(
                 }
             }
             is NetworkState.Success -> {
-                val filteredOnus = state.onus.filter { onu ->
-                    (selectedFilter == null || onu.status.equals(selectedFilter, ignoreCase = true)) &&
-                            (onu.name.contains(searchQuery, ignoreCase = true) ||
-                                    onu.sn.contains(searchQuery, ignoreCase = true))
+                val filteredOnus = remember(state.onus, searchQuery, selectedFilter, profileData?.role) {
+                    val roleBasedFilteredOnus = profileViewModel.getFilteredOnus(state.onus, profileData?.role ?: "")
+
+                    roleBasedFilteredOnus.filter { onu ->
+                        (selectedFilter == null || onu.status.equals(selectedFilter, ignoreCase = true)) &&
+                                (onu.name.contains(searchQuery, ignoreCase = true) ||
+                                        onu.sn.contains(searchQuery, ignoreCase = true))
+                    }
                 }
 
                 if (filteredOnus.isEmpty()) {
@@ -220,12 +230,12 @@ fun OnuCard(onu: OnuDetail, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "${onu.sn} • ${onu.model ?: "Unknown Model"}",
+                    text = "${onu.sn} • ${onu.model ?: "Unknown"} ",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Last seen: ${onu.lastSeen}",
+                    text = "Zone: ${onu.zoneName ?: "Unknown zone"}",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (onu.status.equals("Los", ignoreCase = true)) NosteqRed else MaterialTheme.colorScheme.onSurfaceVariant
                 )

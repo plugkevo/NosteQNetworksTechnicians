@@ -183,20 +183,9 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun getOnuById(sn: String): OnuDetail? {
-        val currentState = _networkState.value
-        println("[v0] getOnuById - Looking for SN: $sn")
-        println("[v0] getOnuById - Current state: $currentState")
-
-        return if (currentState is NetworkState.Success) {
-            println("[v0] getOnuById - Available ONUs count: ${currentState.onus.size}")
-            currentState.onus.forEachIndexed { index, onu ->
-                println("[v0] getOnuById - ONU[$index]: sn=${onu.sn}, name=${onu.name}")
-            }
-            val found = currentState.onus.find { it.sn == sn }
-            println("[v0] getOnuById - Found: ${found != null}")
-            found
+        return if (_networkState.value is NetworkState.Success) {
+            (_networkState.value as NetworkState.Success).onus.find { it.sn == sn }
         } else {
-            println("[v0] getOnuById - State is not Success, returning null")
             null
         }
     }
