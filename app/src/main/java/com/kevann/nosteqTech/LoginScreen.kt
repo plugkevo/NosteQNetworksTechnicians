@@ -1,7 +1,5 @@
 package com.kevann.nosteqTech
 
-import com.kevann.nosteqTech.viewmodel.LoginState
-import com.kevann.nosteqTech.viewmodel.LoginViewModel
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,7 +26,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kevann.nosteqTech.ui.theme.NosteqTheme
-
+import com.kevann.nosteqTech.viewmodel.LoginState
+import com.kevann.nosteqTech.viewmodel.LoginViewModel
 
 @Composable
 fun LoginScreen(
@@ -140,7 +139,7 @@ fun LoginScreen(
                         onValueChange = { email = it },
                         label = { Text("Technician ID") },
                         leadingIcon = {
-                            Icon(imageVector = Icons.Filled.Email, contentDescription = null)
+                            Icon(imageVector = Icons.Filled.Email, contentDescription = "Email icon")
                         },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
@@ -164,7 +163,7 @@ fun LoginScreen(
                         onValueChange = { password = it },
                         label = { Text("Password") },
                         leadingIcon = {
-                            Icon(imageVector = Icons.Filled.Lock, contentDescription = null)
+                            Icon(imageVector = Icons.Filled.Lock, contentDescription = "Lock icon")
                         },
                         trailingIcon = {
                             IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
@@ -182,6 +181,10 @@ fun LoginScreen(
                         ),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        ),
                         enabled = !isLoading // Disable input while loading
                     )
 
@@ -227,7 +230,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             Text(
-                text = "v1.1.0 • Secure Connection",
+                text = "v1.0.0 • Secure Connection",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )

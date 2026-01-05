@@ -148,7 +148,17 @@ fun NosteqApp(context: android.content.Context) {
                                 popUpTo("dashboard") { inclusive = true }
                             }
                         },
-                        profileViewModel = profileViewModel
+                        profileViewModel = profileViewModel,
+                        onNavigateToAnalytics = {
+                            navController.navigate("cache_analytics")
+                        }
+                    )
+                }
+                composable("cache_analytics") {
+                    CacheAnalyticsScreen(
+                        onBack = {
+                            navController.popBackStack()
+                        }
                     )
                 }
                 composable("details/{routerId}") { backStackEntry ->

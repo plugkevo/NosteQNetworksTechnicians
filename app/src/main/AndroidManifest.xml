@@ -12,6 +12,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.NosteqTechnicians">
         <activity
+            android:name=".CrashAnalyticsScreen"
+            android:exported="false"
+            android:label="@string/title_activity_crash_analytics_screen"
+            android:theme="@style/Theme.NosteqTechnicians" />
+        <activity
             android:name=".RouterScreen"
             android:exported="false"
             android:label="@string/title_activity_router_screen"

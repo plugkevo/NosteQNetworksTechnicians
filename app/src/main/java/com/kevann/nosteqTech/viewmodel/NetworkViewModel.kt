@@ -11,6 +11,7 @@ import com.kevann.nosteqTech.data.api.OnuSignalInfo // Import new class
 import com.kevann.nosteqTech.data.api.OnuSpeedProfile // Import new class
 import com.kevann.nosteqTech.data.api.SmartOltApiService
 import com.kevann.nosteqTech.data.api.SpeedTestResult
+import com.kevann.nosteqTech.data.api.cache.FirestoreOnuCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -52,6 +53,8 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     private val gpsCacheFile = File(application.cacheDir, "gps_cache.json")
     private val GPS_CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000 // 24 hours
 
+    private val firestoreCache = FirestoreOnuCache()
+
     fun fetchAllOnus(
         oltId: Int? = null,
         board: Int? = null,
@@ -63,20 +66,17 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             _networkState.value = NetworkState.Loading
 
-            if (!forceRefresh && cacheFile.exists() && (System.currentTimeMillis() - cacheFile.lastModified() < CACHE_EXPIRATION_MS)) {
-                try {
-                    val cachedJson = cacheFile.readText()
-                    val response = apiService.parseOnusJson(cachedJson)
-                    if (response.status && response.onus != null) {
-                        _networkState.value = NetworkState.Success(response.onus)
+            try {
+                if (!forceRefresh && firestoreCache.isCacheValid()) {
+                    val cachedOnus = firestoreCache.getOnusFromCache()
+                    if (cachedOnus != null && cachedOnus.isNotEmpty()) {
+                        Log.d("[v0] ONU Cache", "Loaded ${cachedOnus.size} ONUs from Firestore cache")
+                        _networkState.value = NetworkState.Success(cachedOnus)
                         return@launch
                     }
-                } catch (e: Exception) {
-                    // If cache read fails, proceed to fetch
                 }
-            }
 
-            try {
+                Log.d("[v0] ONU Cache", "Cache invalid or expired, fetching from API")
                 val jsonString = apiService.fetchRawOnusJson(
                     oltId = oltId,
                     board = board,
@@ -85,15 +85,14 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
                     odb = odb
                 )
 
-                // Save to cache
-                cacheFile.writeText(jsonString)
-
                 val response = apiService.parseOnusJson(jsonString)
 
-                _networkState.value = if (response.status && response.onus != null) {
-                    NetworkState.Success(response.onus)
+                if (response.status && response.onus != null) {
+                    firestoreCache.saveOnusToCache(response.onus)
+                    cacheFile.writeText(jsonString) // Keep local cache as backup
+                    _networkState.value = NetworkState.Success(response.onus)
                 } else {
-                    NetworkState.Error(response.error ?: "Failed to fetch ONUs")
+                    _networkState.value = NetworkState.Error(response.error ?: "Failed to fetch ONUs")
                 }
             } catch (e: Exception) {
                 _networkState.value = NetworkState.Error(e.message ?: "Network error")

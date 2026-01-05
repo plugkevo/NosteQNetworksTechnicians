@@ -32,7 +32,8 @@ import kotlinx.coroutines.delay
 fun ProfileScreen(
     onLogout: () -> Unit,
     profileViewModel: ProfileViewModel,  // receive as required parameter instead of default
-    networkViewModel: NetworkViewModel = viewModel()  // Add NetworkViewModel to access ONUs
+    networkViewModel: NetworkViewModel = viewModel(),  // Add NetworkViewModel to access ONUs
+    onNavigateToAnalytics: (() -> Unit)? = null  // Add analytics navigation callback
 ) {
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var editPhoneNumber by remember { mutableStateOf("") }
@@ -303,6 +304,15 @@ fun ProfileScreen(
             leadingContent = { Icon(Icons.Default.Sync, null) },
             modifier = Modifier.clickable { }
         )
+
+        if (onNavigateToAnalytics != null) {
+            ListItem(
+                headlineContent = { Text("Cache Analytics") },
+                supportingContent = { Text("Monitor data sync performance") },
+                leadingContent = { Icon(Icons.Default.Analytics, null) },
+                modifier = Modifier.clickable { onNavigateToAnalytics() }
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
