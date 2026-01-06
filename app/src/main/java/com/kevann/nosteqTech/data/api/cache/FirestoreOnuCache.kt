@@ -12,7 +12,7 @@ class FirestoreOnuCache(private val context: Context? = null) {
     private val metadataDoc = "cache_metadata"
     private val analytics = context?.let { CacheAnalytics(it) }
 
-    // Check if cache is valid (less than 30 minutes old)
+    // Check if cache is valid (less than 24 hours old)
     suspend fun isCacheValid(): Boolean {
         return try {
             val metadataRef = firestore.collection(onusCollection).document(metadataDoc)
@@ -21,8 +21,8 @@ class FirestoreOnuCache(private val context: Context? = null) {
             val currentTime = System.currentTimeMillis()
             val timeDiffMinutes = (currentTime - lastUpdated) / (1000 * 60)
 
-            Log.d("[v0] Firestore Cache", "Cache age: $timeDiffMinutes minutes, Valid: ${timeDiffMinutes < 30}")
-            timeDiffMinutes < 30
+            Log.d("[v0] Firestore Cache", "Cache age: $timeDiffMinutes minutes, Valid: ${timeDiffMinutes < 1440}")
+            timeDiffMinutes < 1440  // Changed from 30 minutes to 24 hours (1440 minutes)
         } catch (e: Exception) {
             Log.e("[v0] Firestore Cache", "Error checking cache validity: ${e.message}")
             false

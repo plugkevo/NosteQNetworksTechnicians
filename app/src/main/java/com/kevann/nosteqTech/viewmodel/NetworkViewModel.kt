@@ -67,32 +67,13 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
             _networkState.value = NetworkState.Loading
 
             try {
-                if (!forceRefresh && firestoreCache.isCacheValid()) {
-                    val cachedOnus = firestoreCache.getOnusFromCache()
-                    if (cachedOnus != null && cachedOnus.isNotEmpty()) {
-                        Log.d("[v0] ONU Cache", "Loaded ${cachedOnus.size} ONUs from Firestore cache")
-                        _networkState.value = NetworkState.Success(cachedOnus)
-                        return@launch
-                    }
-                }
-
-                Log.d("[v0] ONU Cache", "Cache invalid or expired, fetching from API")
-                val jsonString = apiService.fetchRawOnusJson(
-                    oltId = oltId,
-                    board = board,
-                    port = port,
-                    zone = zone,
-                    odb = odb
-                )
-
-                val response = apiService.parseOnusJson(jsonString)
-
-                if (response.status && response.onus != null) {
-                    firestoreCache.saveOnusToCache(response.onus)
-                    cacheFile.writeText(jsonString) // Keep local cache as backup
-                    _networkState.value = NetworkState.Success(response.onus)
+                val cachedOnus = firestoreCache.getOnusFromCache()
+                if (cachedOnus != null && cachedOnus.isNotEmpty()) {
+                    Log.d("[v0] ONU Cache", "Loaded ${cachedOnus.size} ONUs from Firestore")
+                    _networkState.value = NetworkState.Success(cachedOnus)
                 } else {
-                    _networkState.value = NetworkState.Error(response.error ?: "Failed to fetch ONUs")
+                    Log.d("[v0] ONU Cache", "No ONUs in Firestore cache. Cloud Function will sync data.")
+                    _networkState.value = NetworkState.Success(emptyList())
                 }
             } catch (e: Exception) {
                 _networkState.value = NetworkState.Error(e.message ?: "Network error")

@@ -58,6 +58,7 @@ dependencies {
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.database)
     implementation(libs.firebase.config)
+    implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.junit.jupiter) // Or your catalog version    testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
