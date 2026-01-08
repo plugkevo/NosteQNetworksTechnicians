@@ -46,6 +46,12 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     private val _speedTestResult = MutableStateFlow<SpeedTestResult?>(null)
     val speedTestResult: StateFlow<SpeedTestResult?> = _speedTestResult
 
+    private val _onuStatuses = MutableStateFlow<Map<String, String>>(emptyMap())
+    val onuStatuses: StateFlow<Map<String, String>> = _onuStatuses
+
+    private val _onusWithStatus = MutableStateFlow<List<OnuDetail>>(emptyList())
+    val onusWithStatus: StateFlow<List<OnuDetail>> = _onusWithStatus
+
     private val apiService = SmartOltApiService(ApiConfig.SUBDOMAIN, ApiConfig.API_KEY)
     private val cacheFile = File(application.cacheDir, "onus_cache.json")
     private val CACHE_EXPIRATION_MS = 60 * 60 * 1000 // 1 hour
@@ -191,5 +197,31 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     fun clearSpeedTestResult() {
         _speedTestResult.value = null
         Log.d("[v0] Speed Test", "Speed test result cleared")
+    }
+
+    fun fetchOnuStatuses(
+        oltId: Int? = null,
+        board: Int? = null,
+        port: Int? = null,
+        zone: String? = null
+    ) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.getOnuStatuses(oltId, board, port, zone)
+                if (response.status && response.response != null) {
+                    val statusMap = response.response.associate { it.sn to it.status }
+                    _onuStatuses.value = statusMap
+                    Log.d("[v0] ONU Statuses", "Fetched ${statusMap.size} real-time statuses")
+                } else {
+                    Log.e("[v0] ONU Statuses", "Error: ${response.error}")
+                }
+            } catch (e: Exception) {
+                Log.e("[v0] ONU Statuses", "Failed to fetch statuses: ${e.message}")
+            }
+        }
+    }
+
+    fun getOnuStatus(sn: String): String? {
+        return _onuStatuses.value[sn]
     }
 }

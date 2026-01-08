@@ -110,6 +110,19 @@ data class SpeedTestResult(
     val error: String? = null
 )
 
+data class OnuStatus(
+    val uniqueExternalId: String,
+    val sn: String,
+    val status: String, // Online, Power fail, LOS, Offline
+    val signal1310: String? = null
+)
+
+data class OnuStatusResponse(
+    val status: Boolean,
+    val response: List<OnuStatus>? = null,
+    val error: String? = null
+)
+
 class SmartOltApiService(
     private val subdomain: String,
     private val apiKey: String
@@ -555,5 +568,130 @@ class SmartOltApiService(
             )
         }
     }
-}
 
+    suspend fun getOnuStatuses(
+        oltId: Int? = null,
+        board: Int? = null,
+        port: Int? = null,
+        zone: String? = null
+    ): OnuStatusResponse = withContext(Dispatchers.IO) {
+        try {
+            val urlBuilder = StringBuilder("$baseUrl/onu/get_onus_statuses")
+            val params = mutableListOf<String>()
+
+            oltId?.let { params.add("olt_id=$it") }
+            board?.let { params.add("board=$it") }
+            port?.let { params.add("port=$it") }
+            zone?.let { params.add("zone=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+
+            if (params.isNotEmpty()) {
+                urlBuilder.append("?${params.joinToString("&")}")
+            }
+
+            val url = URL(urlBuilder.toString())
+            val connection = url.openConnection() as HttpURLConnection
+
+            connection.apply {
+                requestMethod = "GET"
+                setRequestProperty("X-Token", apiKey)
+                setRequestProperty("Content-Type", "application/json")
+                connectTimeout = 30000
+                readTimeout = 30000
+            }
+
+            val responseCode = connection.responseCode
+            val inputStream = if (responseCode == HttpURLConnection.HTTP_OK) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+
+            val responseString = inputStream.bufferedReader().use { it.readText() }
+            val jsonResponse = JSONObject(responseString)
+
+            if (jsonResponse.optBoolean("status")) {
+                val responseArray = jsonResponse.optJSONArray("response") ?: JSONArray()
+                val statuses = mutableListOf<OnuStatus>()
+
+                for (i in 0 until responseArray.length()) {
+                    val item = responseArray.getJSONObject(i)
+                    statuses.add(OnuStatus(
+                        uniqueExternalId = item.optString("unique_external_id"),
+                        sn = item.optString("sn"),
+                        status = item.optString("status"),
+                        signal1310 = item.optString("signal_1310").ifEmpty { null }
+                    ))
+                }
+                OnuStatusResponse(status = true, response = statuses)
+            } else {
+                OnuStatusResponse(status = false, error = "Failed to fetch ONU statuses")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            OnuStatusResponse(status = false, error = e.message ?: "Network error")
+        }
+    }
+
+    suspend fun getOnusStatuses(
+        oltId: Int? = null,
+        board: Int? = null,
+        port: Int? = null,
+        zone: String? = null
+    ): Map<String, String> = withContext(Dispatchers.IO) {
+        try {
+            val urlBuilder = StringBuilder("$baseUrl/onu/get_onus_statuses")
+            val params = mutableListOf<String>()
+
+            oltId?.let { params.add("olt_id=$it") }
+            board?.let { params.add("board=$it") }
+            port?.let { params.add("port=$it") }
+            zone?.let { params.add("zone=${java.net.URLEncoder.encode(it, "UTF-8")}") }
+
+            if (params.isNotEmpty()) {
+                urlBuilder.append("?${params.joinToString("&")}")
+            }
+
+            val url = URL(urlBuilder.toString())
+            val connection = url.openConnection() as HttpURLConnection
+
+            connection.apply {
+                requestMethod = "GET"
+                setRequestProperty("X-Token", apiKey)
+                setRequestProperty("Content-Type", "application/json")
+                connectTimeout = 30000
+                readTimeout = 30000
+            }
+
+            val responseCode = connection.responseCode
+            val inputStream = if (responseCode == HttpURLConnection.HTTP_OK) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+
+            val responseString = inputStream.bufferedReader().use { it.readText() }
+            val jsonResponse = JSONObject(responseString)
+
+            val statusMap = mutableMapOf<String, String>()
+
+            if (jsonResponse.optBoolean("status")) {
+                val responseArray = jsonResponse.optJSONArray("response") ?: JSONArray()
+
+                for (i in 0 until responseArray.length()) {
+                    val item = responseArray.getJSONObject(i)
+                    val sn = item.optString("sn")
+                    val status = item.optString("status", "Unknown")
+
+                    if (sn.isNotEmpty()) {
+                        statusMap[sn] = status
+                    }
+                }
+            }
+
+            statusMap
+        } catch (e: Exception) {
+            Log.e("SmartOltApiService", "Error fetching ONU statuses", e)
+            emptyMap()
+        }
+    }
+}
