@@ -137,7 +137,7 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("Technician ID") },
+                        label = { Text("Technician ID/Email") },
                         leadingIcon = {
                             Icon(imageVector = Icons.Filled.Email, contentDescription = "Email icon")
                         },

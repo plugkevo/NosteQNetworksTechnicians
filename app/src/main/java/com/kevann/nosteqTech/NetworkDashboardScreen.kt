@@ -21,6 +21,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kevann.nosteqTech.data.api.OnuDetail
+import com.kevann.nosteqTech.data.api.OnuStatus
 
 
 import com.kevann.nosteqTech.ui.theme.NosteqRed
@@ -43,12 +44,17 @@ fun NetworkDashboardScreen(
 
     val networkState by viewModel.networkState.collectAsState()
     val profileData by profileViewModel.profileData.collectAsState()
+    val onuStatuses by viewModel.onuStatuses.collectAsState() // collect live statuses
 
     LaunchedEffect(Unit) {
         if (networkState is NetworkState.Loading) {
             viewModel.fetchAllOnus()
             profileViewModel.fetchUserProfile()
         }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.fetchOnuStatuses()
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -158,7 +164,8 @@ fun NetworkDashboardScreen(
                     val roleBasedFilteredOnus = profileViewModel.getFilteredOnus(state.onus, profileData?.role ?: "")
 
                     roleBasedFilteredOnus.filter { onu ->
-                        (selectedFilter == null || onu.status.equals(selectedFilter, ignoreCase = true)) &&
+                        val liveStatus = viewModel.getOnuStatus(onu.sn)?.status?.lowercase() ?: ""
+                        (selectedFilter == null || liveStatus.contains(selectedFilter!!, ignoreCase = true)) &&
                                 (onu.name.contains(searchQuery, ignoreCase = true) ||
                                         onu.sn.contains(searchQuery, ignoreCase = true))
                     }
@@ -182,7 +189,7 @@ fun NetworkDashboardScreen(
                     ) {
                         items(filteredOnus.size) { index ->
                             val onu = filteredOnus[index]
-                            OnuCard(onu = onu, onClick = { onRouterClick(onu.sn) })
+                            OnuCard(onu = onu, onClick = { onRouterClick(onu.sn) }, liveStatus = viewModel.getOnuStatus(onu.sn))
                         }
                     }
                 }
@@ -192,7 +199,7 @@ fun NetworkDashboardScreen(
 }
 
 @Composable
-fun OnuCard(onu: OnuDetail, onClick: () -> Unit) {
+fun OnuCard(onu: OnuDetail, onClick: () -> Unit, liveStatus: OnuStatus? = null) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -207,11 +214,13 @@ fun OnuCard(onu: OnuDetail, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Status Indicator
+            val statusString = liveStatus?.status ?: "Unknown"
+
             Box(
                 modifier = Modifier
                     .size(12.dp)
                     .background(
-                        color = when (onu.status.lowercase()) {
+                        color = when (statusString.lowercase()) {
                             "los" -> NosteqRed
                             "offline" -> Color.Gray
                             "online" -> Color.Green
@@ -235,9 +244,14 @@ fun OnuCard(onu: OnuDetail, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Zone: ${onu.zoneName ?: "Unknown zone"}",
+                    text = "Zone: ${onu.zoneName ?: "Unknown"}",
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (onu.status.equals("Los", ignoreCase = true)) NosteqRed else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Status: $statusString",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 

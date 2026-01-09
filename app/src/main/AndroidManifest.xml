@@ -6,9 +6,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@drawable/nosteq_app_logo"
+        android:icon="@drawable/nosteq_logo_512"
         android:label="@string/app_name"
-        android:roundIcon="@drawable/nosteq_app_logo"
+        android:roundIcon="@drawable/nosteq_logo_512"
         android:supportsRtl="true"
         android:theme="@style/Theme.NosteqTechnicians">
         <activity

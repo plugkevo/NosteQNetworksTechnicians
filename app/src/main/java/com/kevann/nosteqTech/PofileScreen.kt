@@ -1,5 +1,7 @@
 package com.kevann.nosteqTech
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -40,6 +42,8 @@ fun ProfileScreen(
     var isEditingPhone by remember { mutableStateOf(false) }
     var showPhoneUpdateSuccess by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var showContactSupportDialog by remember { mutableStateOf(false) }
+    var showDidContactDialog by remember { mutableStateOf(false) }
 
     val profileState by profileViewModel.profileState.collectAsState()
     val profileData by profileViewModel.profileData.collectAsState()
@@ -152,34 +156,6 @@ fun ProfileScreen(
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-            )
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Work Statistics",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    StatItem(value = onusManagedCount.toString(), label = "ONUs Managed")  // Use dynamic count
-                    StatItem(value = "156", label = "Issues Resolved")
-                    StatItem(value = "24m", label = "Avg Response")
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -268,18 +244,6 @@ fun ProfileScreen(
         )
 
         ListItem(
-            headlineContent = { Text("Push Notifications") },
-            supportingContent = { Text("Receive alerts for urgent issues") },
-            leadingContent = { Icon(Icons.Default.Notifications, null) },
-            trailingContent = {
-                Switch(
-                    checked = true,
-                    onCheckedChange = { }
-                )
-            }
-        )
-
-        ListItem(
             headlineContent = { Text("Dark Mode") },
             leadingContent = { Icon(Icons.Default.DarkMode, null) },
             trailingContent = {
@@ -305,15 +269,6 @@ fun ProfileScreen(
             modifier = Modifier.clickable { }
         )
 
-        if (onNavigateToAnalytics != null) {
-            ListItem(
-                headlineContent = { Text("Cache Analytics") },
-                supportingContent = { Text("Monitor data sync performance") },
-                leadingContent = { Icon(Icons.Default.Analytics, null) },
-                modifier = Modifier.clickable { onNavigateToAnalytics() }
-            )
-        }
-
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
@@ -327,14 +282,20 @@ fun ProfileScreen(
 
         ListItem(
             headlineContent = { Text("App Version") },
-            supportingContent = { Text("v1.0.5") },
+            supportingContent = { Text("v1.0.0") },
             leadingContent = { Icon(Icons.Default.Info, null) }
+        )
+
+        ListItem(
+            headlineContent = { Text("DID Contacts") },
+            leadingContent = { Icon(Icons.Default.Phone, null) },
+            modifier = Modifier.clickable { showDidContactDialog = true }
         )
 
         ListItem(
             headlineContent = { Text("Contact Support") },
             leadingContent = { Icon(Icons.Default.Help, null) },
-            modifier = Modifier.clickable { }
+            modifier = Modifier.clickable { showContactSupportDialog = true }
         )
 
         ListItem(
@@ -342,18 +303,6 @@ fun ProfileScreen(
             leadingContent = { Icon(Icons.Default.Info, null) },
             modifier = Modifier.clickable { showAboutDialog = true }
         )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-        ) {
-            Icon(Icons.Default.ExitToApp, null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Logout")
-        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -366,6 +315,22 @@ fun ProfileScreen(
                 .padding(bottom = 16.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
+
+        Button(
+            onClick = onLogout,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error
+            )
+        ) {
+            Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Logout")
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 
     if (showChangePasswordDialog) {
@@ -390,6 +355,18 @@ fun ProfileScreen(
         LaunchedEffect(Unit) {
             showPhoneUpdateSuccess = false
         }
+    }
+
+    if (showContactSupportDialog) {
+        ContactSupportDialog(
+            onDismiss = { showContactSupportDialog = false }
+        )
+    }
+
+    if (showDidContactDialog) {
+        DidContactDialog(
+            onDismiss = { showDidContactDialog = false }
+        )
     }
 }
 
@@ -574,55 +551,114 @@ fun AboutDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("About SmartOlt Technician") },
+        title = { Text("About Nosteq Technicians") },
         text = {
             Column {
-                Text(
-                    text = "App Version",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                Text(
-                    text = "v1.0.5",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+                Text("v1.0.0", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Nosteq Technicians app for managing ONUs and network infrastructure.", style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
 
-                Text(
-                    text = "Build Number",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                Text(
-                    text = "2024.01.1005",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+@Composable
+fun ContactSupportDialog(
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
 
-                Text(
-                    text = "Description",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                Text(
-                    text = "NosteQ Networks Technician app is a comprehensive mobile application designed to help field technicians manage and monitor network devices (ONUs) efficiently. View device status, perform diagnostics, and manage customer information all in one place.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Contact Support") },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:0790875188"))
+                            context.startActivity(intent)
+                        }
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            "Kevann Technologies",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "0790875188",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Icon(
+                        Icons.Default.Phone,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
 
-                Text(
-                    text = "Developer",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-                Text(
-                    text = "Kevann Technologies",
-                    style = MaterialTheme.typography.bodyMedium
-                )
+@Composable
+fun DidContactDialog(
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val didContacts = listOf(
+        Triple("NOSTEQ SUPPORT", "25402005006090", "1000"),
+        Triple("SKYSPORT SUPPORT", "25402005006091", "1001"),
+        Triple("OPERATIONS", "25402005006099", "1010"),
+        Triple("ACCOUNTS", "25402005006092", "1002"),
+        Triple("IT DEPARTMENT", "25402005006096", "1007"),
+        Triple("CEO", "25402005006093", "1008"),
+        Triple("CTO", "25402005006095", "1004"),
+        Triple("NOSTEQ BUSINESS CLIENTS", "25402005006097", "1003"),
+        Triple("NETWORK AND DESIGN", "25402005006094", "1005")
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("DID Contacts") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                didContacts.forEach { (department, did, extension) ->
+                    ListItem(
+                        headlineContent = { Text(department) },
+                        supportingContent = {
+                            Text("DID: $did | Ext: $extension")
+                        },
+                        leadingContent = { Icon(Icons.Default.Phone, null) },
+                        modifier = Modifier.clickable {
+                            val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$did"))
+                            context.startActivity(intent)
+                            onDismiss()
+                        }
+                    )
+                    Divider()
+                }
             }
         },
         confirmButton = {

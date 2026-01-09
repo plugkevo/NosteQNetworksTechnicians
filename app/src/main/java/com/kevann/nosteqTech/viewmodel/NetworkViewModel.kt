@@ -9,6 +9,7 @@ import com.kevann.nosteqTech.data.api.OnuDetail
 import com.kevann.nosteqTech.data.api.OnuFullStatus
 import com.kevann.nosteqTech.data.api.OnuSignalInfo // Import new class
 import com.kevann.nosteqTech.data.api.OnuSpeedProfile // Import new class
+import com.kevann.nosteqTech.data.api.OnuStatus // Import new class
 import com.kevann.nosteqTech.data.api.SmartOltApiService
 import com.kevann.nosteqTech.data.api.SpeedTestResult
 import com.kevann.nosteqTech.data.api.cache.FirestoreOnuCache
@@ -46,8 +47,11 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     private val _speedTestResult = MutableStateFlow<SpeedTestResult?>(null)
     val speedTestResult: StateFlow<SpeedTestResult?> = _speedTestResult
 
-    private val _onuStatuses = MutableStateFlow<Map<String, String>>(emptyMap())
-    val onuStatuses: StateFlow<Map<String, String>> = _onuStatuses
+    private val _onuStatuses = MutableStateFlow<Map<String, OnuStatus>>(emptyMap())
+    val onuStatuses: StateFlow<Map<String, OnuStatus>> = _onuStatuses
+
+    private val _liveOnuStatus = MutableStateFlow<OnuStatus?>(null)
+    val liveOnuStatus: StateFlow<OnuStatus?> = _liveOnuStatus
 
     private val _onusWithStatus = MutableStateFlow<List<OnuDetail>>(emptyList())
     val onusWithStatus: StateFlow<List<OnuDetail>> = _onusWithStatus
@@ -209,7 +213,7 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val response = apiService.getOnuStatuses(oltId, board, port, zone)
                 if (response.status && response.response != null) {
-                    val statusMap = response.response.associate { it.sn to it.status }
+                    val statusMap = response.response.associate { it.sn to it }
                     _onuStatuses.value = statusMap
                     Log.d("[v0] ONU Statuses", "Fetched ${statusMap.size} real-time statuses")
                 } else {
@@ -221,7 +225,21 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun getOnuStatus(sn: String): String? {
+    fun getOnuStatus(sn: String): OnuStatus? {
         return _onuStatuses.value[sn]
+    }
+
+    fun getOnuStatusString(sn: String): String? {
+        return _onuStatuses.value[sn]?.status
+    }
+
+    fun fetchLiveOnuStatus(uniqueExternalId: String) {
+        viewModelScope.launch {
+            val status = apiService.getOnuStatus(uniqueExternalId)
+            _liveOnuStatus.value = status
+            if (status != null) {
+                Log.d("[v0] Live Status", "Fetched live status for $uniqueExternalId: ${status.status}")
+            }
+        }
     }
 }

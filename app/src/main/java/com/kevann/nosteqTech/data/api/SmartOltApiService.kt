@@ -131,6 +131,7 @@ class SmartOltApiService(
 
     suspend fun getOnuSignal(uniqueExternalId: String): OnuSignalInfo? = withContext(Dispatchers.IO) {
         try {
+            Log.d("[v0] ONU Signal", "Fetching signal for ONU: $uniqueExternalId")
             val url = URL("$baseUrl/onu/get_onu_signal/$uniqueExternalId")
             val connection = url.openConnection() as HttpURLConnection
 
@@ -149,21 +150,59 @@ class SmartOltApiService(
                 connection.errorStream
             }
 
-            val responseString = inputStream.bufferedReader().use { it.readText() }
-            val jsonResponse = JSONObject(responseString)
+            val response = inputStream.bufferedReader().use { it.readText() }
+            Log.d("[v0] ONU Signal", "Signal Response Code: $responseCode")
 
-            if (jsonResponse.optBoolean("status")) {
-                OnuSignalInfo(
-                    signalQuality = jsonResponse.optString("onu_signal", "Unknown"),
-                    signalValue = jsonResponse.optString("onu_signal_value", "N/A"),
-                    signal1310 = jsonResponse.optString("onu_signal_1310").ifEmpty { null },
-                    signal1490 = jsonResponse.optString("onu_signal_1490").ifEmpty { null }
-                )
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val jsonObject = JSONObject(response)
+                if (jsonObject.optBoolean("status", false)) {
+                    return@withContext OnuSignalInfo(
+                        signalQuality = jsonObject.optString("onu_signal", "Unknown"),
+                        signalValue = jsonObject.optString("onu_signal_value", "N/A"),
+                        signal1310 = jsonObject.optString("onu_signal_1310", null),
+                        signal1490 = jsonObject.optString("onu_signal_1490", null)
+                    )
+                }
+            }
+            Log.e("[v0] ONU Signal", "Failed to fetch signal. Response: $response")
+            return@withContext null
+        } catch (e: Exception) {
+            Log.e("[v0] ONU Signal", "Error fetching ONU signal: ${e.message}")
+            e.printStackTrace()
+            return@withContext null
+        }
+    }
+
+    suspend fun getOnuStatus(uniqueExternalId: String): OnuStatus? = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$baseUrl/onu/get_onu_status/$uniqueExternalId")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("X-Token", apiKey)
+
+            val response = if (connection.responseCode == 200) {
+                connection.inputStream.bufferedReader().readText()
             } else {
                 null
             }
+
+            response?.let {
+                val json = JSONObject(it)
+                if (json.getBoolean("status")) {
+                    val onuStatus = json.getString("onu_status")
+                    val signal1310 = json.optString("onu_signal_1310", null)
+                    OnuStatus(
+                        uniqueExternalId = uniqueExternalId,
+                        sn = "", // SN will need to be fetched separately
+                        status = onuStatus,
+                        signal1310 = signal1310
+                    )
+                } else {
+                    null
+                }
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("[v0] ONU Status", "Error fetching status: ${e.message}")
             null
         }
     }

@@ -2,21 +2,17 @@ package com.kevann.nosteqTech
 
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect // Import LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,7 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kevann.nosteqTech.data.api.SpeedTestResult
 import com.kevann.nosteqTech.ui.theme.NosteqRed
 import com.kevann.nosteqTech.ui.theme.NosteqTheme
 import com.kevann.nosteqTech.viewmodel.NetworkState
@@ -36,22 +31,22 @@ import com.kevann.nosteqTech.viewmodel.NetworkViewModel
 @Composable
 fun RouterDetailsScreen(
     routerId: String, // This is now the ONU SN
-    onBackClick: () -> Unit,
+    onBackClick: () -> Unit = {},
     viewModel: NetworkViewModel = viewModel()
 ) {
     val networkState = viewModel.networkState.collectAsState().value
-    val liveStatus = viewModel.selectedOnuStatus.collectAsState().value
-    val signalInfo = viewModel.selectedOnuSignal.collectAsState().value // Collect signal info
+    val onuStatuses by viewModel.onuStatuses.collectAsState() // collect live statuses
+    val signalInfo = viewModel.selectedOnuSignal.collectAsState().value
     val gpsCoordinates = viewModel.gpsCoordinates.collectAsState().value
     val speedProfile = viewModel.selectedOnuSpeedProfile.collectAsState().value
     val speedTestResult = viewModel.speedTestResult.collectAsState(initial = null).value
+    val liveOnuStatus = onuStatuses[routerId]?.status ?: "Loading..."
 
     val onu = viewModel.getOnuById(routerId)
 
     val uniqueId = onu?.uniqueExternalId
 
     LaunchedEffect(routerId) {
-        Log.d("[v0] Router Details", "routerId changed to: $routerId - Clearing speed test result")
         viewModel.clearSpeedTestResult()
     }
 
@@ -59,72 +54,13 @@ fun RouterDetailsScreen(
         LaunchedEffect(uniqueId) {
             viewModel.fetchOnuFullStatus(uniqueId)
             viewModel.fetchOnuSignal(uniqueId)
-            viewModel.fetchOnuSpeedProfile(uniqueId)  // Fetch speed profile
+            viewModel.fetchOnuSpeedProfile(uniqueId)
             viewModel.fetchGpsCoordinates()
-        }
-    }
-    if (onu != null && uniqueId != null) {
-        try {
-            Log.d("[v0] Router Details", "=== ROUTER DETAILS ===")
-            Log.d("[v0] Router Details", "Name: ${onu.name}")
-            Log.d("[v0] Router Details", "Serial Number (SN): ${onu.sn}")
-            Log.d("[v0] Router Details", "Model: ${onu.model ?: "N/A"}")
-            Log.d("[v0] Router Details", "Status: ${onu.administrativeStatus ?: "N/A"}")
-            Log.d("[v0] Router Details", "Phone Number: ${onu.phoneNumber ?: "N/A"}")
-            Log.d("[v0] Router Details", "")
-            Log.d("[v0] Router Details", "--- Network Configuration ---")
-            Log.d("[v0] Router Details", "IP Address: ${onu.ipAddress ?: "N/A"}")
-            Log.d("[v0] Router Details", "Subnet Mask: ${onu.subnetMask ?: "N/A"}")
-            Log.d("[v0] Router Details", "Default Gateway: ${onu.defaultGateway ?: "N/A"}")
-            Log.d("[v0] Router Details", "DNS 1: ${onu.dns1 ?: "N/A"}")
-            Log.d("[v0] Router Details", "DNS 2: ${onu.dns2 ?: "N/A"}")
-            Log.d("[v0] Router Details", "")
-            Log.d("[v0] Router Details", "--- System Configuration ---")
-            Log.d("[v0] Router Details", "Mode: ${onu.mode ?: "N/A"}")
-            Log.d("[v0] Router Details", "WAN Mode: ${onu.wanMode ?: "N/A"}")
-            Log.d("[v0] Router Details", "Username: ${onu.username ?: "N/A"}")
-            Log.d("[v0] Router Details", "Password: ${if (onu.password != null) "***HIDDEN***" else "N/A"}")
-            Log.d("[v0] Router Details", "CATV: ${onu.catv ?: "N/A"}")
-            Log.d("[v0] Router Details", "")
-            Log.d("[v0] Router Details", "--- Signal & Performance ---")
-            Log.d("[v0] Router Details", "RX Power: ${onu.rxPower ?: "N/A"} dBm")
-            Log.d("[v0] Router Details", "TX Power: ${onu.txPower ?: "N/A"} dBm")
-            Log.d("[v0] Router Details", "Last Seen: ${onu.lastSeen ?: "N/A"}")
-            Log.d("[v0] Router Details", "Distance: ${onu.distance?.let { "$it meters" } ?: "N/A"}")
-            Log.d("[v0] Router Details", "")
-            Log.d("[v0] Router Details", "--- Location & Infrastructure ---")
-            Log.d("[v0] Router Details", "Zone Name: ${onu.zoneName ?: "N/A"}")
-            Log.d("[v0] Router Details", "OLT Name: ${onu.oltName ?: "N/A"}")
-            Log.d("[v0] Router Details", "ONU Type: ${onu.onuTypeName ?: "N/A"}")
-            Log.d("[v0] Router Details", "Board: ${onu.board ?: "N/A"}")
-            Log.d("[v0] Router Details", "Port: ${onu.port ?: "N/A"}")
-            Log.d("[v0] Router Details", "Address: ${onu.address ?: "N/A"}")
-            Log.d("[v0] Router Details", "ODB Name: ${onu.odbName ?: "N/A"}")
-            Log.d("[v0] Router Details", "")
-            Log.d("[v0] Router Details", "--- Service Ports ---")
-            if (onu.servicePorts != null && onu.servicePorts.isNotEmpty()) {
-                onu.servicePorts.forEachIndexed { index, port ->
-                    Log.d("[v0] Router Details", "Port ${index + 1}: ID=${port.id}, Name=${port.name}, ")
-                }
-            } else {
-                Log.d("[v0] Router Details", "No service ports configured")
-            }
-            Log.d("[v0] Router Details", "")
-            Log.d("[v0] Router Details", "Unique External ID: ${onu.uniqueExternalId ?: "N/A"}")
-            Log.d("[v0] Router Details", "=== END ROUTER DETAILS ===")
-        } catch (e: Exception) {
-            Log.e("[v0] Router Details", "Error logging router details", e)
+            viewModel.fetchLiveOnuStatus(uniqueId)
         }
     }
 
     val context = LocalContext.current
-
-    LaunchedEffect(gpsCoordinates) {
-        if (uniqueId != null) {
-            val gps = gpsCoordinates[uniqueId]
-            Log.d("[v0]", "GPS Coordinates for $uniqueId: Lat=${gps?.first}, Long=${gps?.second}")
-        }
-    }
 
     if (onu == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -182,35 +118,28 @@ fun RouterDetailsScreen(
                 modifier = Modifier.padding(vertical = 4.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = when {
-                        onu.status.contains("online", ignoreCase = true) -> Color(0xFF2E7D32).copy(alpha = 0.1f)
-                        onu.status.contains("offline", ignoreCase = true) -> NosteqRed.copy(alpha = 0.1f)
+                        liveOnuStatus?.contains("power fail", ignoreCase = true) == true -> Color(0xFFF57C00).copy(alpha = 0.1f)
+                        liveOnuStatus?.contains("los", ignoreCase = true) == true -> Color(0xFFF57C00).copy(alpha = 0.1f)
+                        liveOnuStatus?.contains("offline", ignoreCase = true) == true -> NosteqRed.copy(alpha = 0.1f)
                         else -> MaterialTheme.colorScheme.surfaceVariant
                     }
                 )
             ) {
                 Text(
-                    text = "Status: ${onu.status}",
+                    text = "Status: ${liveOnuStatus ?: "Loading..."}",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = when {
-                        onu.status.contains("online", ignoreCase = true) -> Color(0xFF2E7D32)
-                        onu.status.contains("offline", ignoreCase = true) -> NosteqRed
+                        liveOnuStatus?.contains("online", ignoreCase = true) == true -> Color(0xFF2E7D32)
+                        liveOnuStatus?.contains("power fail", ignoreCase = true) == true -> Color(0xFFF57C00)
+                        liveOnuStatus?.contains("los", ignoreCase = true) == true -> Color(0xFFF57C00)
+                        liveOnuStatus?.contains("offline", ignoreCase = true) == true -> NosteqRed
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "IP: ${liveStatus?.ipAddress ?: onu.ipAddress ?: "N/A"}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "MAC: ${onu.uniqueExternalId ?: "N/A"}", // Using uniqueExternalId as MAC/ID placeholder if MAC is missing
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             Text(
                 text = "SN: ${onu.sn}",
                 style = MaterialTheme.typography.bodyMedium,
@@ -306,12 +235,6 @@ fun RouterDetailsScreen(
                                     isCritical = false
                                 )
                             }
-                            val dist = liveStatus?.distance ?: onu.distance
-                            TelemetryItem(
-                                label = "Distance",
-                                value = if (dist != null) "${dist}m" else "Loading...",
-                                isCritical = false
-                            )
                         }
                     } else {
                         // Fallback to original display
@@ -319,9 +242,8 @@ fun RouterDetailsScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            val rx = liveStatus?.rxPower ?: onu.rxPower
-                            val tx = liveStatus?.txPower ?: onu.txPower
-                            val dist = liveStatus?.distance ?: onu.distance
+                            val rx = onu.rxPower
+                            val tx = onu.txPower
 
                             TelemetryItem(
                                 label = "Rx Power",
@@ -333,23 +255,6 @@ fun RouterDetailsScreen(
                                 value = if (tx != null) "$tx dBm" else "Loading...",
                                 isCritical = false
                             )
-                            TelemetryItem(
-                                label = "Distance",
-                                value = if (dist != null) "${dist}m" else "Loading...",
-                                isCritical = false
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (liveStatus?.runState != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Live Status: ${liveStatus.runState}", fontWeight = FontWeight.Bold)
-                        if (liveStatus.lastDownCause != null) {
-                            Text("Last Down Cause: ${liveStatus.lastDownCause}")
                         }
                     }
                 }
@@ -370,12 +275,6 @@ fun RouterDetailsScreen(
                         text = "Zone: ${onu.zoneName ?: "Unknown"}",
                         style = MaterialTheme.typography.bodyLarge
                     )
-                    if (onu.odbName != null) {
-                        Text(
-                            text = "ODB: ${onu.odbName}",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
                     if (onu.username != null) {
                         Text(
                             text = "Customer Phone: ${onu.username}",
@@ -422,7 +321,6 @@ fun RouterDetailsScreen(
                         val gps = uniqueId?.let { gpsCoordinates[it] }
 
                         if (gps != null) {
-                            Log.d("[v0]", "Opening Google Maps with GPS: ${gps.first}, ${gps.second}")
                             val uriString = "geo:${gps.first},${gps.second}?q=${gps.first},${gps.second}(${Uri.encode(onu.name)})"
                             val gmmIntentUri = Uri.parse(uriString)
                             val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
@@ -433,7 +331,6 @@ fun RouterDetailsScreen(
                                 Toast.makeText(context, "Google Maps not installed", Toast.LENGTH_SHORT).show()
                             }
                         } else {
-                            Log.d("[v0]", "GPS coordinates not available for $uniqueId")
                             Toast.makeText(context, "GPS coordinates not available", Toast.LENGTH_SHORT).show()
                         }
                     },
@@ -444,7 +341,7 @@ fun RouterDetailsScreen(
                     Text(if (uniqueId != null && gpsCoordinates.containsKey(uniqueId)) "Navigate (GPS)" else "Navigate")
                 }
 
-                OutlinedButton(
+                Button(
                     onClick = {
                         if (speedTestResult?.isLoading == true) {
                             Toast.makeText(context, "Speed test in progress...", Toast.LENGTH_SHORT).show()
@@ -452,18 +349,12 @@ fun RouterDetailsScreen(
                             viewModel.runSpeedTest()
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
                 ) {
-                    Icon(Icons.Default.NetworkCheck, contentDescription = null)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        when {
-                            speedTestResult?.isLoading == true -> "Testing..."
-                            speedTestResult?.downloadSpeedMbps != null ->
-                                "Speed: %.1f Mbps".format(speedTestResult.downloadSpeedMbps)
-                            else -> "Speed Test"
-                        }
-                    )
+                    Icon(Icons.Default.NetworkCheck, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Speed Test")
                 }
             }
 
@@ -500,19 +391,6 @@ fun RouterDetailsScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-
-            Button(
-                onClick = {
-                    Toast.makeText(context, "Ticket Marked Resolved", Toast.LENGTH_SHORT).show()
-                    onBackClick()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
-            ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Mark Resolved")
-            }
         }
     }
 }
