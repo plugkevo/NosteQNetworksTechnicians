@@ -230,7 +230,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             Text(
-                text = "v1.0.0 • Secure Connection",
+                text = "v1.0.1 • Secure Connection",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )

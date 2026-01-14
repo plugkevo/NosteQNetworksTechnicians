@@ -56,6 +56,9 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     private val _onusWithStatus = MutableStateFlow<List<OnuDetail>>(emptyList())
     val onusWithStatus: StateFlow<List<OnuDetail>> = _onusWithStatus
 
+    private val _displayedOnuCount = MutableStateFlow(30) // Add pagination state
+    val displayedOnuCount: StateFlow<Int> = _displayedOnuCount
+
     private val apiService = SmartOltApiService(ApiConfig.SUBDOMAIN, ApiConfig.API_KEY)
     private val cacheFile = File(application.cacheDir, "onus_cache.json")
     private val CACHE_EXPIRATION_MS = 60 * 60 * 1000 // 1 hour
@@ -241,5 +244,9 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
                 Log.d("[v0] Live Status", "Fetched live status for $uniqueExternalId: ${status.status}")
             }
         }
+    }
+
+    fun loadMoreOnu() { // Add function to load more ONUs
+        _displayedOnuCount.value += 30
     }
 }
