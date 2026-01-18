@@ -44,10 +44,11 @@ fun NetworkDashboardScreen(
     val onuStatuses by viewModel.onuStatuses.collectAsState() // collect live statuses
     val displayedOnuCount by viewModel.displayedOnuCount.collectAsState() // Collect pagination state
 
+    // Always fetch profile data to ensure role-based filtering works
     LaunchedEffect(Unit) {
+        profileViewModel.fetchUserProfile()
         if (networkState is NetworkState.Loading) {
             viewModel.fetchAllOnus()
-            profileViewModel.fetchUserProfile()
         }
     }
 
@@ -128,12 +129,26 @@ fun NetworkDashboardScreen(
             }
         } else {
             val allOnus = when (networkState) {
-                is NetworkState.Success -> (networkState as NetworkState.Success).onus.take(displayedOnuCount)
+                is NetworkState.Success -> (networkState as NetworkState.Success).onus
                 else -> emptyList()
             }
 
-            val displayOnus = if (selectedFilter != null) {
+            // Role-based filtering: Technicians see only ONUs in their service area
+            val userRole = profileData?.role ?: ""
+            val userServiceArea = profileData?.serviceArea ?: ""
+
+            val roleFilteredOnus = if (userRole.equals("technician", ignoreCase = true) && userServiceArea.isNotEmpty()) {
                 allOnus.filter { onu ->
+                    onu.zoneName.equals(userServiceArea, ignoreCase = true)
+                }
+            } else {
+                // Admin and other roles see all ONUs
+                allOnus
+            }
+
+            // Apply status filter if selected
+            val statusFilteredOnus = if (selectedFilter != null) {
+                roleFilteredOnus.filter { onu ->
                     val status = onuStatuses[onu.sn]?.status?.lowercase() ?: "unknown"
                     when (selectedFilter!!.lowercase()) {
                         "los" -> status == "los"
@@ -143,8 +158,21 @@ fun NetworkDashboardScreen(
                     }
                 }
             } else {
-                allOnus
+                roleFilteredOnus
             }
+
+            // Apply search filter
+            val searchFilteredOnus = if (searchQuery.isNotEmpty()) {
+                statusFilteredOnus.filter { onu ->
+                    onu.name.contains(searchQuery, ignoreCase = true) ||
+                            onu.sn.contains(searchQuery, ignoreCase = true)
+                }
+            } else {
+                statusFilteredOnus
+            }
+
+            // Apply pagination
+            val displayOnus = searchFilteredOnus.take(displayedOnuCount)
 
             if (displayOnus.isNotEmpty()) {
                 LazyColumn(
