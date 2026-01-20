@@ -1,9 +1,9 @@
-package com.kevann.nosteqTech.data.api.cache
+package com.kevannTechnologies.nosteqTech.data.api.cache
 
 import android.content.Context
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
-import com.kevann.nosteqTech.data.api.OnuDetail
+import com.kevannTechnologies.nosteqTech.data.api.OnuDetail
 import kotlinx.coroutines.tasks.await
 
 class FirestoreOnuCache(private val context: Context? = null) {

@@ -1,18 +1,18 @@
-package com.kevann.nosteqTech.viewmodel
+package com.kevannTechnologies.nosteqTech.viewmodel
 
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.kevann.nosteqTech.ApiConfig
-import com.kevann.nosteqTech.data.api.OnuDetail
-import com.kevann.nosteqTech.data.api.OnuFullStatus
-import com.kevann.nosteqTech.data.api.OnuSignalInfo // Import new class
-import com.kevann.nosteqTech.data.api.OnuSpeedProfile // Import new class
-import com.kevann.nosteqTech.data.api.OnuStatus // Import new class
-import com.kevann.nosteqTech.data.api.SmartOltApiService
-import com.kevann.nosteqTech.data.api.SpeedTestResult
-import com.kevann.nosteqTech.data.api.cache.FirestoreOnuCache
+import com.kevannTechnologies.nosteqTech.ApiConfig
+import com.kevannTechnologies.nosteqTech.data.api.OnuDetail
+import com.kevannTechnologies.nosteqTech.data.api.OnuFullStatus
+import com.kevannTechnologies.nosteqTech.data.api.OnuSignalInfo // Import new class
+import com.kevannTechnologies.nosteqTech.data.api.OnuSpeedProfile // Import new class
+import com.kevannTechnologies.nosteqTech.data.api.OnuStatus // Import new class
+import com.kevannTechnologies.nosteqTech.data.api.SmartOltApiService
+import com.kevannTechnologies.nosteqTech.data.api.SpeedTestResult
+import com.kevannTechnologies.nosteqTech.data.api.cache.FirestoreOnuCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch

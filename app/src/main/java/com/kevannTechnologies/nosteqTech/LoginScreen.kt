@@ -1,4 +1,4 @@
-package com.kevann.nosteqTech
+package com.kevannTechnologies.nosteqTech
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -25,9 +25,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kevann.nosteqTech.ui.theme.NosteqTheme
-import com.kevann.nosteqTech.viewmodel.LoginState
-import com.kevann.nosteqTech.viewmodel.LoginViewModel
+import com.kevannTechnologies.nosteqTech.ui.theme.NosteqTheme
+import com.kevannTechnologies.nosteqTech.viewmodel.LoginState
+import com.kevannTechnologies.nosteqTech.viewmodel.LoginViewModel
 
 @Composable
 fun LoginScreen(
@@ -230,7 +230,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             Text(
-                text = "v1.0.1 • Secure Connection",
+                text = "v1.0.0 • Secure Connection",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )

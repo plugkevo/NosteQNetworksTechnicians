@@ -1,4 +1,4 @@
-package com.kevann.nosteqTech
+package com.kevannTechnologies.nosteqTech
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -26,8 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.kevann.nosteqTech.data.api.cache.CacheAnalytics
-import com.kevann.nosteqTech.data.api.cache.CacheMetrics
+import com.kevannTechnologies.nosteqTech.data.api.cache.CacheAnalytics
+import com.kevannTechnologies.nosteqTech.data.api.cache.CacheMetrics
 
 
 @OptIn(ExperimentalMaterial3Api::class)

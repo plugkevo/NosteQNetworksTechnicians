@@ -1,4 +1,4 @@
-package com.kevann.nosteqTech.data.api
+package com.kevannTechnologies.nosteqTech.data.api
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

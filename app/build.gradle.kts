@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.kevann.nosteqTech"
+    namespace = "com.kevannTechnologies.nosteqTech"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.kevann.nosteqTech"
+        applicationId = "com.kevannTechnologies.nosteqTech"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

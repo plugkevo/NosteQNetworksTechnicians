@@ -1,4 +1,4 @@
-package com.kevann.nosteqTech
+package com.kevannTechnologies.nosteqTech
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -17,11 +17,11 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.kevann.nosteqTech.ui.theme.NosteqTheme
-import com.kevann.nosteqTech.ui.viewmodel.ProfileViewModel
-import com.kevann.nosteqTech.viewmodel.LoginState
-import com.kevann.nosteqTech.viewmodel.LoginViewModel
-import com.kevann.nosteqTech.viewmodel.NetworkViewModel
+import com.kevannTechnologies.nosteqTech.ui.theme.NosteqTheme
+import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileViewModel
+import com.kevannTechnologies.nosteqTech.viewmodel.LoginState
+import com.kevannTechnologies.nosteqTech.viewmodel.LoginViewModel
+import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
 import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {

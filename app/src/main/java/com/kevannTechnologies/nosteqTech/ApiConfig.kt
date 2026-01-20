@@ -1,4 +1,4 @@
-package com.kevann.nosteqTech
+package com.kevannTechnologies.nosteqTech
 
 
 object ApiConfig {

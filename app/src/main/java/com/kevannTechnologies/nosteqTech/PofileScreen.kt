@@ -1,4 +1,4 @@
-package com.kevann.nosteqTech
+package com.kevannTechnologies.nosteqTech
 
 import android.content.Intent
 import android.net.Uri
@@ -21,12 +21,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.kevann.nosteqTech.data.api.OnuDetail
-import com.kevann.nosteqTech.ui.theme.NosteqTheme
-import com.kevann.nosteqTech.ui.viewmodel.ProfileState
-import com.kevann.nosteqTech.ui.viewmodel.ProfileViewModel
-import com.kevann.nosteqTech.viewmodel.NetworkState
-import com.kevann.nosteqTech.viewmodel.NetworkViewModel
+import com.kevannTechnologies.nosteqTech.ui.theme.NosteqTheme
+import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileState
+import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileViewModel
+import com.kevannTechnologies.nosteqTech.viewmodel.NetworkState
+import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
 
 import kotlinx.coroutines.delay
 

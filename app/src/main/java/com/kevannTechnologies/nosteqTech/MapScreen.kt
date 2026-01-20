@@ -1,4 +1,4 @@
-package com.kevann.nosteqTech
+package com.kevannTechnologies.nosteqTech
 
 
 import androidx.compose.foundation.background
@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.kevann.nosteqTech.ui.theme.NosteqTheme
+import com.kevannTechnologies.nosteqTech.ui.theme.NosteqTheme
 
 @Composable
 fun MapScreen() {

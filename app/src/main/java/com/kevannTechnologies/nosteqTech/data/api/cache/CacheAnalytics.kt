@@ -1,10 +1,9 @@
-package com.kevann.nosteqTech.data.api.cache
+package com.kevannTechnologies.nosteqTech.data.api.cache
 
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
 
 data class CacheMetrics(
     val cacheHits: Int = 0,

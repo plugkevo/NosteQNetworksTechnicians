@@ -1,10 +1,10 @@
-package com.kevann.nosteqTech.ui.viewmodel
+package com.kevannTechnologies.nosteqTech.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.kevann.nosteqTech.data.api.OnuDetail
+import com.kevannTechnologies.nosteqTech.data.api.OnuDetail
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

@@ -1,4 +1,4 @@
-package com.kevann.nosteqTech.ui.theme
+package com.kevannTechnologies.nosteqTech.ui.theme
 
 import android.app.Activity
 import android.os.Build
