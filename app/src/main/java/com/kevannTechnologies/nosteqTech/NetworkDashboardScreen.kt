@@ -1,5 +1,7 @@
 package com.kevannTechnologies.nosteqTech
 
+
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,6 +29,7 @@ import com.kevannTechnologies.nosteqTech.ui.theme.NosteqYellow
 import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileViewModel
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkState
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
+
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -133,13 +136,14 @@ fun NetworkDashboardScreen(
                 else -> emptyList()
             }
 
-            // Role-based filtering: Technicians see only ONUs in their service area
+            // Role-based filtering: Technicians see only ONUs in their assigned zone
             val userRole = profileData?.role ?: ""
             val userServiceArea = profileData?.serviceArea ?: ""
 
             val roleFilteredOnus = if (userRole.equals("technician", ignoreCase = true) && userServiceArea.isNotEmpty()) {
                 allOnus.filter { onu ->
-                    onu.zoneName.equals(userServiceArea, ignoreCase = true)
+                    val onuZone = onu.zoneName ?: ""
+                    ZoneConfig.isOnuInZone(onuZone, userServiceArea)
                 }
             } else {
                 // Admin and other roles see all ONUs
