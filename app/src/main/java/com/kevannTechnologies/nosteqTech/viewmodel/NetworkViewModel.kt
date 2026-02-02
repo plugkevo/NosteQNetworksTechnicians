@@ -1,24 +1,27 @@
 package com.kevannTechnologies.nosteqTech.viewmodel
 
 import android.app.Application
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+
 import com.kevannTechnologies.nosteqTech.ApiConfig
 import com.kevannTechnologies.nosteqTech.data.api.OnuDetail
 import com.kevannTechnologies.nosteqTech.data.api.OnuFullStatus
-import com.kevannTechnologies.nosteqTech.data.api.OnuSignalInfo // Import new class
-import com.kevannTechnologies.nosteqTech.data.api.OnuSpeedProfile // Import new class
-import com.kevannTechnologies.nosteqTech.data.api.OnuStatus // Import new class
+import com.kevannTechnologies.nosteqTech.data.api.OnuSignalInfo
+import com.kevannTechnologies.nosteqTech.data.api.OnuSpeedProfile
+import com.kevannTechnologies.nosteqTech.data.api.OnuStatus
 import com.kevannTechnologies.nosteqTech.data.api.SmartOltApiService
 import com.kevannTechnologies.nosteqTech.data.api.SpeedTestResult
 import com.kevannTechnologies.nosteqTech.data.api.cache.FirestoreOnuCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import org.json.JSONArray // Import JSONArray
-import org.json.JSONObject // Import JSONObject
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
+
 
 
 
@@ -56,17 +59,18 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     private val _onusWithStatus = MutableStateFlow<List<OnuDetail>>(emptyList())
     val onusWithStatus: StateFlow<List<OnuDetail>> = _onusWithStatus
 
-    private val _displayedOnuCount = MutableStateFlow(30) // Add pagination state
+    private val _displayedOnuCount = MutableStateFlow(30)
     val displayedOnuCount: StateFlow<Int> = _displayedOnuCount
 
     private val apiService = SmartOltApiService(ApiConfig.SUBDOMAIN, ApiConfig.API_KEY)
     private val cacheFile = File(application.cacheDir, "onus_cache.json")
-    private val CACHE_EXPIRATION_MS = 60 * 60 * 1000 // 1 hour
+    private val CACHE_EXPIRATION_MS = 60 * 60 * 1000
 
     private val gpsCacheFile = File(application.cacheDir, "gps_cache.json")
-    private val GPS_CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000 // 24 hours
+    private val GPS_CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000
 
     private val firestoreCache = FirestoreOnuCache()
+    private val sharedPreferences: SharedPreferences = application.getSharedPreferences("onus_cache", 0)
 
     fun fetchAllOnus(
         oltId: Int? = null,
@@ -77,26 +81,105 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
         forceRefresh: Boolean = false
     ) {
         viewModelScope.launch {
-            _networkState.value = NetworkState.Loading
-
             try {
-                val cachedOnus = firestoreCache.getOnusFromCache()
-                if (cachedOnus != null && cachedOnus.isNotEmpty()) {
-                    Log.d("[v0] ONU Cache", "Loaded ${cachedOnus.size} ONUs from Firestore")
-                    _networkState.value = NetworkState.Success(cachedOnus)
+                // Load cached ONUs from SharedPreferences immediately
+                val cachedJson = sharedPreferences.getString("onus_list", null)
+                if (cachedJson != null && !forceRefresh) {
+                    try {
+                        val cachedOnuList = parseOnuListFromJson(cachedJson)
+                        if (cachedOnuList.isNotEmpty()) {
+                            _networkState.value = NetworkState.Success(cachedOnuList)
+                            Log.d("[v0]", "Displaying ${cachedOnuList.size} ONUs from persistent cache")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("[v0]", "Failed to parse cached ONUs: ${e.message}")
+                    }
+                }
+
+                // Fetch fresh data from Firestore in background
+                val freshOnus = firestoreCache.getOnusFromCache()
+                if (freshOnus != null && freshOnus.isNotEmpty()) {
+                    Log.d("[v0]", "Fetched ${freshOnus.size} ONUs from Firestore")
+
+                    // Save to persistent cache (SharedPreferences)
+                    val jsonString = convertOnuListToJson(freshOnus)
+                    sharedPreferences.edit().putString("onus_list", jsonString).apply()
+                    Log.d("[v0]", "Updated persistent cache with fresh ONUs")
+
+                    // Update UI with fresh data
+                    _networkState.value = NetworkState.Success(freshOnus)
                 } else {
-                    Log.d("[v0] ONU Cache", "No ONUs in Firestore cache. Cloud Function will sync data.")
-                    _networkState.value = NetworkState.Success(emptyList())
+                    Log.d("[v0]", "No fresh ONUs fetched from Firestore")
                 }
             } catch (e: Exception) {
-                _networkState.value = NetworkState.Error(e.message ?: "Network error")
+                Log.e("[v0]", "Error fetching ONUs: ${e.message}")
+                _networkState.value = NetworkState.Error(e.message ?: "Unknown error")
             }
         }
     }
 
+    private fun convertOnuListToJson(onus: List<OnuDetail>): String {
+        val jsonArray = JSONArray()
+        onus.forEach { onu ->
+            val obj = JSONObject()
+            obj.put("uniqueExternalId", onu.uniqueExternalId ?: "")
+            obj.put("sn", onu.sn)
+            obj.put("name", onu.name)
+            obj.put("model", onu.onuTypeName ?: "")
+            obj.put("zoneName", onu.zoneName ?: "")
+            obj.put("rxPower", onu.rxPower ?: 0.0)
+            obj.put("txPower", onu.txPower ?: 0.0)
+            jsonArray.put(obj)
+        }
+        return jsonArray.toString()
+    }
+
+    private fun parseOnuListFromJson(jsonString: String): List<OnuDetail> {
+        val onus = mutableListOf<OnuDetail>()
+        val jsonArray = JSONArray(jsonString)
+        for (i in 0 until jsonArray.length()) {
+            val obj = jsonArray.getJSONObject(i)
+            val onu = OnuDetail(
+                uniqueExternalId = obj.optString("uniqueExternalId", ""),
+                sn = obj.optString("sn", ""),
+                name = obj.optString("name", ""),
+                oltId = null,
+                oltName = null,
+                board = null,
+                port = null,
+                onu = null,
+                onuTypeId = null,
+                onuTypeName = obj.optString("model", ""),
+                zoneId = null,
+                zoneName = obj.optString("zoneName", ""),
+                address = null,
+                odbName = null,
+                mode = null,
+                wanMode = null,
+                ipAddress = null,
+                subnetMask = null,
+                defaultGateway = null,
+                dns1 = null,
+                dns2 = null,
+                username = null,
+                password = null,
+                catv = null,
+                administrativeStatus = null,
+                servicePorts = null,
+                phoneNumber = null,
+                status = "Unknown",
+                rxPower = obj.optDouble("rxPower", 0.0),
+                txPower = obj.optDouble("txPower", 0.0)
+            )
+            onus.add(onu)
+        }
+        return onus
+    }
+
     fun fetchGpsCoordinates(forceRefresh: Boolean = false) {
         viewModelScope.launch {
-            if (!forceRefresh && gpsCacheFile.exists() && (System.currentTimeMillis() - gpsCacheFile.lastModified() < GPS_CACHE_EXPIRATION_MS)) {
+            if (!forceRefresh && gpsCacheFile.exists() &&
+                (System.currentTimeMillis() - gpsCacheFile.lastModified() < GPS_CACHE_EXPIRATION_MS)) {
                 try {
                     val cachedJson = gpsCacheFile.readText()
                     val jsonResponse = JSONObject(cachedJson)
@@ -116,16 +199,16 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
                         return@launch
                     }
                 } catch (e: Exception) {
-                    // Ignore cache error
+                    Log.e("[v0]", "GPS cache error: ${e.message}")
                 }
             }
 
             val response = apiService.getAllOnusGpsCoordinates()
             if (response.status && response.onus != null) {
-                // Update state
-                _gpsCoordinates.value = response.onus.associate { it.uniqueExternalId to Pair(it.latitude, it.longitude) }
+                _gpsCoordinates.value = response.onus.associate {
+                    it.uniqueExternalId to Pair(it.latitude, it.longitude)
+                }
 
-                // Save to cache (reconstruct simple JSON)
                 try {
                     val jsonRoot = JSONObject()
                     jsonRoot.put("status", true)
@@ -140,7 +223,7 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
                     jsonRoot.put("onus", jsonArray)
                     gpsCacheFile.writeText(jsonRoot.toString())
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.e("[v0]", "Failed to cache GPS: ${e.message}")
                 }
             }
         }
@@ -148,7 +231,7 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
 
     fun fetchOnuFullStatus(uniqueExternalId: String) {
         viewModelScope.launch {
-            _selectedOnuStatus.value = null // Reset previous status
+            _selectedOnuStatus.value = null
             val status = apiService.getOnuFullStatusInfo(uniqueExternalId)
             _selectedOnuStatus.value = status
         }
@@ -156,7 +239,7 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
 
     fun fetchOnuSignal(uniqueExternalId: String) {
         viewModelScope.launch {
-            _selectedOnuSignal.value = null // Reset previous signal
+            _selectedOnuSignal.value = null
             val signal = apiService.getOnuSignal(uniqueExternalId)
             _selectedOnuSignal.value = signal
         }
@@ -164,13 +247,12 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
 
     fun fetchOnuSpeedProfile(uniqueExternalId: String) {
         viewModelScope.launch {
-            _selectedOnuSpeedProfile.value = null // Reset previous profile
+            _selectedOnuSpeedProfile.value = null
             val speedProfile = apiService.getOnuSpeedProfiles(uniqueExternalId)
             _selectedOnuSpeedProfile.value = speedProfile
             if (speedProfile != null) {
-                Log.d("[v0]", "Speed Profile for $uniqueExternalId - Download: ${speedProfile.downloadProfileName}, Upload: ${speedProfile.uploadProfileName}")
-            } else {
-                Log.d("[v0]", "Speed Profile not available for $uniqueExternalId")
+                Log.d("[v0]", "Speed Profile - Download: ${speedProfile.downloadProfileName}, " +
+                        "Upload: ${speedProfile.uploadProfileName}")
             }
         }
     }
@@ -194,16 +276,13 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
             val result = apiService.runSpeedTest()
             _speedTestResult.value = result
 
-            Log.d("[v0] Speed Test", "Download Speed: ${result.downloadSpeedMbps?.let { "%.2f Mbps".format(it) } ?: "N/A"}")
-            if (result.error != null) {
-                Log.e("[v0] Speed Test", "Error: ${result.error}")
-            }
+            Log.d("[v0] Speed Test", "Download: ${result.downloadSpeedMbps?.let {
+                "%.2f Mbps".format(it) } ?: "N/A"}")
         }
     }
 
     fun clearSpeedTestResult() {
         _speedTestResult.value = null
-        Log.d("[v0] Speed Test", "Speed test result cleared")
     }
 
     fun fetchOnuStatuses(
@@ -218,12 +297,10 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
                 if (response.status && response.response != null) {
                     val statusMap = response.response.associate { it.sn to it }
                     _onuStatuses.value = statusMap
-                    Log.d("[v0] ONU Statuses", "Fetched ${statusMap.size} real-time statuses")
-                } else {
-                    Log.e("[v0] ONU Statuses", "Error: ${response.error}")
+                    Log.d("[v0]", "Fetched ${statusMap.size} real-time statuses")
                 }
             } catch (e: Exception) {
-                Log.e("[v0] ONU Statuses", "Failed to fetch statuses: ${e.message}")
+                Log.e("[v0]", "Failed to fetch statuses: ${e.message}")
             }
         }
     }
@@ -240,13 +317,10 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch {
             val status = apiService.getOnuStatus(uniqueExternalId)
             _liveOnuStatus.value = status
-            if (status != null) {
-                Log.d("[v0] Live Status", "Fetched live status for $uniqueExternalId: ${status.status}")
-            }
         }
     }
 
-    fun loadMoreOnu() { // Add function to load more ONUs
+    fun loadMoreOnu() {
         _displayedOnuCount.value += 30
     }
 }
