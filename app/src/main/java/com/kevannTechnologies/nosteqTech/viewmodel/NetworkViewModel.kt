@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-
 import com.kevannTechnologies.nosteqTech.ApiConfig
 import com.kevannTechnologies.nosteqTech.data.api.OnuDetail
 import com.kevannTechnologies.nosteqTech.data.api.OnuFullStatus

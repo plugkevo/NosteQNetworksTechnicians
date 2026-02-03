@@ -21,13 +21,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kevannTechnologies.nosteqTech.data.api.AppConstants
 import com.kevannTechnologies.nosteqTech.ui.theme.NosteqTheme
 import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileState
 import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileViewModel
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkState
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
-
 import kotlinx.coroutines.delay
+
 
 @Composable
 fun ProfileScreen(
@@ -37,16 +38,12 @@ fun ProfileScreen(
     onNavigateToAnalytics: (() -> Unit)? = null  // Add analytics navigation callback
 ) {
     var showChangePasswordDialog by remember { mutableStateOf(false) }
-    var editPhoneNumber by remember { mutableStateOf("") }
-    var isEditingPhone by remember { mutableStateOf(false) }
-    var showPhoneUpdateSuccess by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showContactSupportDialog by remember { mutableStateOf(false) }
     var showDidContactDialog by remember { mutableStateOf(false) }
 
     val profileState by profileViewModel.profileState.collectAsState()
     val profileData by profileViewModel.profileData.collectAsState()
-    val updatePhoneState by profileViewModel.updatePhoneState.collectAsState()
     val updatePasswordState by profileViewModel.updatePasswordState.collectAsState()
     val onusManagedCount by profileViewModel.onusManagedCount.collectAsState()
     val isDarkMode by profileViewModel.isDarkMode.collectAsState()
@@ -168,62 +165,8 @@ fun ProfileScreen(
                 // Email - Read only (Admin controlled)
                 ReadOnlyInfoField(icon = Icons.Default.Email, label = "Email", value = profileData?.email ?: "N/A")
 
-                // Phone - Editable by technician
-                if (isEditingPhone) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = editPhoneNumber,
-                            onValueChange = { editPhoneNumber = it },
-                            label = { Text("Phone Number") },
-                            modifier = Modifier.weight(1f),
-                            leadingIcon = { Icon(Icons.Default.Phone, null) }
-                        )
-                        IconButton(
-                            onClick = {
-                                if (editPhoneNumber.isNotBlank()) {
-                                    profileViewModel.updatePhoneNumber(editPhoneNumber)
-                                }
-                            },
-                            enabled = updatePhoneState !is ProfileState.Loading
-                        ) {
-                            Icon(Icons.Default.Check, "Save")
-                        }
-                        IconButton(onClick = { isEditingPhone = false }) {
-                            Icon(Icons.Default.Close, "Cancel")
-                        }
-                    }
-                    if (updatePhoneState is ProfileState.Error) {
-                        Text(
-                            text = (updatePhoneState as ProfileState.Error).message,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                    if (updatePhoneState is ProfileState.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .align(Alignment.End)
-                        )
-                    }
-                } else {
-                    EditableInfoField(
-                        icon = Icons.Default.Phone,
-                        label = "Phone",
-                        value = profileData?.phoneNumber ?: "N/A",
-                        onEdit = {
-                            editPhoneNumber = profileData?.phoneNumber ?: ""
-                            isEditingPhone = true
-                        }
-                    )
-                }
+                // Phone - Read only (Admin managed)
+                ReadOnlyInfoField(icon = Icons.Default.Phone, label = "Phone", value = profileData?.phoneNumber ?: "N/A")
 
                 // Service Area - Read only (Admin controlled)
                 ReadOnlyInfoField(icon = Icons.Default.LocationOn, label = "Service Area", value = profileData?.serviceArea ?: "N/A")
@@ -281,7 +224,7 @@ fun ProfileScreen(
 
         ListItem(
             headlineContent = { Text("App Version") },
-            supportingContent = { Text("v1.0.0") },
+            supportingContent = { Text(AppConstants.APP_VERSION) },
             leadingContent = { Icon(Icons.Default.Info, null) }
         )
 
@@ -348,12 +291,6 @@ fun ProfileScreen(
         AboutDialog(
             onDismiss = { showAboutDialog = false }
         )
-    }
-
-    if (showPhoneUpdateSuccess) {
-        LaunchedEffect(Unit) {
-            showPhoneUpdateSuccess = false
-        }
     }
 
     if (showContactSupportDialog) {
@@ -553,7 +490,7 @@ fun AboutDialog(
         title = { Text("About Nosteq Technicians") },
         text = {
             Column {
-                Text("v1.0.0", style = MaterialTheme.typography.bodyMedium)
+                Text(AppConstants.APP_VERSION, style = MaterialTheme.typography.bodyMedium)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Nosteq Technicians app for managing ONUs and network infrastructure.", style = MaterialTheme.typography.bodySmall)
             }

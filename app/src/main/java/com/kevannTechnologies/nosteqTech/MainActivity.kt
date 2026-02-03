@@ -24,6 +24,9 @@ import com.kevannTechnologies.nosteqTech.viewmodel.LoginViewModel
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
 import kotlinx.coroutines.delay
 
+
+
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -138,6 +141,54 @@ fun NosteqApp(context: android.content.Context) {
                         onRouterClick = { routerId ->
                             navController.navigate("details/$routerId")
                         },
+                        onNavigateToLos = {
+                            navController.navigate("los")
+                        },
+                        onNavigateToOffline = {
+                            navController.navigate("offline")
+                        },
+                        onNavigateToPowerFail = {
+                            navController.navigate("powerfail")
+                        },
+                        viewModel = networkViewModel
+                    )
+                }
+                composable("los") {
+                    LosFragment(
+                        onBack = { navController.popBackStack() },
+                        onRouterClick = { routerId ->
+                            navController.navigate("details/$routerId")
+                        },
+                        onNavigateToOnline = { navController.navigate("dashboard") },
+                        onNavigateToLos = { navController.navigate("los") },
+                        onNavigateToOffline = { navController.navigate("offline") },
+                        onNavigateToPowerFail = { navController.navigate("powerfail") },
+                        viewModel = networkViewModel
+                    )
+                }
+                composable("offline") {
+                    OfflineFragment(
+                        onBack = { navController.popBackStack() },
+                        onRouterClick = { routerId ->
+                            navController.navigate("details/$routerId")
+                        },
+                        onNavigateToOnline = { navController.navigate("dashboard") },
+                        onNavigateToLos = { navController.navigate("los") },
+                        onNavigateToOffline = { navController.navigate("offline") },
+                        onNavigateToPowerFail = { navController.navigate("powerfail") },
+                        viewModel = networkViewModel
+                    )
+                }
+                composable("powerfail") {
+                    PowerFailFragment(
+                        onBack = { navController.popBackStack() },
+                        onRouterClick = { routerId ->
+                            navController.navigate("details/$routerId")
+                        },
+                        onNavigateToOnline = { navController.navigate("dashboard") },
+                        onNavigateToLos = { navController.navigate("los") },
+                        onNavigateToOffline = { navController.navigate("offline") },
+                        onNavigateToPowerFail = { navController.navigate("powerfail") },
                         viewModel = networkViewModel
                     )
                 }

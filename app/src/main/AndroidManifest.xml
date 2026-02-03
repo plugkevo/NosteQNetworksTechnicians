@@ -14,6 +14,21 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.NosteqTechnicians">
         <activity
+            android:name=".PowerFailFragment"
+            android:exported="false"
+            android:label="@string/title_activity_power_fail_fragment"
+            android:theme="@style/Theme.NosteqTechnicians" />
+        <activity
+            android:name=".OfflineFragment"
+            android:exported="false"
+            android:label="@string/title_activity_offline_fragment"
+            android:theme="@style/Theme.NosteqTechnicians" />
+        <activity
+            android:name=".LosFragment"
+            android:exported="false"
+            android:label="@string/title_activity_los_fragment"
+            android:theme="@style/Theme.NosteqTechnicians" />
+        <activity
             android:name=".CrashAnalyticsScreen"
             android:exported="false"
             android:label="@string/title_activity_crash_analytics_screen"

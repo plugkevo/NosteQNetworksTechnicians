@@ -6,4 +6,7 @@
     <string name="title_activity_pofile_screen">PofileScreen</string>
     <string name="title_activity_router_screen">RouterScreen</string>
     <string name="title_activity_crash_analytics_screen">CrashAnalyticsScreen</string>
+    <string name="title_activity_los_fragment">LosFragment</string>
+    <string name="title_activity_offline_fragment">OfflineFragment</string>
+    <string name="title_activity_power_fail_fragment">PowerFailFragment</string>
 </resources>

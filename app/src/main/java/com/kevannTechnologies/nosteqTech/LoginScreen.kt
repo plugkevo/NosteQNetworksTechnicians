@@ -25,9 +25,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kevannTechnologies.nosteqTech.data.api.AppConstants
 import com.kevannTechnologies.nosteqTech.ui.theme.NosteqTheme
 import com.kevannTechnologies.nosteqTech.viewmodel.LoginState
 import com.kevannTechnologies.nosteqTech.viewmodel.LoginViewModel
+
+
 
 @Composable
 fun LoginScreen(
@@ -137,7 +140,7 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = email,
                         onValueChange = { email = it },
-                        label = { Text("Technician ID/Email") },
+                        label = { Text("Technician ID") },
                         leadingIcon = {
                             Icon(imageVector = Icons.Filled.Email, contentDescription = "Email icon")
                         },
@@ -230,7 +233,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             Text(
-                text = "v1.0.0 • Secure Connection",
+                text = "${AppConstants.APP_VERSION} • Secure Connection",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
