@@ -29,6 +29,10 @@ import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileViewModel
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkState
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
 import kotlinx.coroutines.delay
+import com.kevannTechnologies.nosteqTech.data.api.CountData
+
+
+
 
 
 
@@ -95,7 +99,7 @@ fun NetworkDashboardScreen(
                 .padding(horizontal = 16.dp)
         ) {}
 
-        // Calculate counts for all statuses before chips
+        // Calculate counts for all statuses before chips - memoized for performance
         val allOnus = when (networkState) {
             is NetworkState.Success -> (networkState as NetworkState.Success).onus
             else -> emptyList()
@@ -104,26 +108,46 @@ fun NetworkDashboardScreen(
         val userRole = profileData?.role ?: ""
         val userServiceArea = profileData?.serviceArea ?: ""
 
-        val roleFilteredOnus = if (userRole.equals("technician", ignoreCase = true) && userServiceArea.isNotEmpty()) {
-            allOnus.filter { onu ->
-                val onuZone = onu.zoneName ?: ""
-                ZoneConfig.isOnuInZone(onuZone, userServiceArea)
+        val roleFilteredOnus = remember(allOnus, userRole, userServiceArea, onuStatuses) {
+            if (userRole.equals("technician", ignoreCase = true) && userServiceArea.isNotEmpty()) {
+                allOnus.filter { onu ->
+                    val onuZone = onu.zoneName ?: ""
+                    ZoneConfig.isOnuInZone(onuZone, userServiceArea)
+                }
+            } else {
+                allOnus
             }
-        } else {
-            allOnus
         }
 
-        val onlineCount = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "online" }
-        val losCount = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "los" }
-        val offlineCount = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "offline" }
-        val powerFailCount = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "power fail" }
+        val countData = remember(roleFilteredOnus, onuStatuses) {
+            CountData(
+                online = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "online" },
+                los = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "los" },
+                offline = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "offline" },
+                powerFail = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "power fail" }
+            )
+        }
 
-        // Determine chip labels based on role
-        val isTechnician = userRole.equals("technician", ignoreCase = true)
-        val onlineLabel = if (isTechnician) "Online" else "Online ($onlineCount)"
-        val losLabel = "LOS ($losCount)"
-        val offlineLabel = if (isTechnician) "Offline" else "Offline ($offlineCount)"
-        val powerFailLabel = if (isTechnician) "Power Fail" else "Power Fail ($powerFailCount)"
+        val onlineCount = countData.online
+        val losCount = countData.los
+        val offlineCount = countData.offline
+        val powerFailCount = countData.powerFail
+
+        // Determine chip labels based on role - memoized
+        val isTechnician = remember(userRole) { userRole.equals("technician", ignoreCase = true) }
+        val chipLabels = remember(isTechnician, onlineCount, losCount, offlineCount, powerFailCount) {
+            mapOf(
+                "online" to if (isTechnician) "Online" else "Online ($onlineCount)",
+                "los" to "LOS ($losCount)",
+                "offline" to if (isTechnician) "Offline" else "Offline ($offlineCount)",
+                "powerfail" to if (isTechnician) "Power Fail" else "Power Fail ($powerFailCount)"
+            )
+        }
+
+        val onlineLabel = chipLabels["online"] ?: "Online"
+        val losLabel = chipLabels["los"] ?: "LOS"
+        val offlineLabel = chipLabels["offline"] ?: "Offline"
+        val powerFailLabel = chipLabels["powerfail"] ?: "Power Fail"
 
         // Filter Chips - Navigate to fragments instead of filtering - 2x2 grid
         Column(

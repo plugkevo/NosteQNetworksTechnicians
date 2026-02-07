@@ -16,11 +16,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kevannTechnologies.nosteqTech.data.api.CountData
 import com.kevannTechnologies.nosteqTech.ui.theme.NosteqRed
 import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileViewModel
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkState
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
 import kotlinx.coroutines.delay
+
 
 
 
@@ -73,17 +75,36 @@ fun LosFragment(
         allOnus
     }
 
-    val onlineCount = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "online" }
-    val losCount = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "los" }
-    val offlineCount = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "offline" }
-    val powerFailCount = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "power fail" }
 
-    // Determine chip labels based on role
-    val isTechnician = userRole.equals("technician", ignoreCase = true)
-    val onlineLabel = if (isTechnician) "Online" else "Online ($onlineCount)"
-    val losLabel = "LOS ($losCount)"
-    val offlineLabel = if (isTechnician) "Offline" else "Offline ($offlineCount)"
-    val powerFailLabel = if (isTechnician) "Power Fail" else "Power Fail ($powerFailCount)"
+    val countData = remember(roleFilteredOnus, onuStatuses) {
+        CountData(
+            online = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "online" },
+            los = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "los" },
+            offline = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "offline" },
+            powerFail = roleFilteredOnus.count { onuStatuses[it.sn]?.status?.lowercase() == "power fail" }
+        )
+    }
+
+    val onlineCount = countData.online
+    val losCount = countData.los
+    val offlineCount = countData.offline
+    val powerFailCount = countData.powerFail
+
+    // Determine chip labels based on role - memoized
+    val isTechnician = remember(userRole) { userRole.equals("technician", ignoreCase = true) }
+    val chipLabels = remember(isTechnician, onlineCount, losCount, offlineCount, powerFailCount) {
+        mapOf(
+            "online" to if (isTechnician) "Online" else "Online ($onlineCount)",
+            "los" to "LOS ($losCount)",
+            "offline" to if (isTechnician) "Offline" else "Offline ($offlineCount)",
+            "powerfail" to if (isTechnician) "Power Fail" else "Power Fail ($powerFailCount)"
+        )
+    }
+
+    val onlineLabel = chipLabels["online"] ?: "Online"
+    val losLabel = chipLabels["los"] ?: "LOS"
+    val offlineLabel = chipLabels["offline"] ?: "Offline"
+    val powerFailLabel = chipLabels["powerfail"] ?: "Power Fail"
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Header with title and refresh button
