@@ -8,30 +8,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.*
 import com.kevannTechnologies.nosteqTech.ui.theme.NosteqTheme
 import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileViewModel
 import com.kevannTechnologies.nosteqTech.viewmodel.LoginState
 import com.kevannTechnologies.nosteqTech.viewmodel.LoginViewModel
-import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
 import kotlinx.coroutines.delay
-
-
-
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-
         setContent {
             NosteqTheme {
                 NosteqApp(this)
@@ -45,14 +38,14 @@ fun NosteqApp(context: android.content.Context) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
     val showBottomBar = currentRoute != "login" &&
             currentRoute?.startsWith("details") == false
 
-    val networkViewModel: NetworkViewModel = viewModel()
     val profileViewModel: ProfileViewModel = viewModel()
     val isDarkMode by profileViewModel.isDarkMode.collectAsState()
 
-    val loginViewModel = LoginViewModel(context)
+    val loginViewModel = remember { LoginViewModel(context) }
 
     var startDestination by remember { mutableStateOf("login") }
 
@@ -62,7 +55,6 @@ fun NosteqApp(context: android.content.Context) {
 
         if (email != null && password != null && loginViewModel.isSessionValid()) {
             loginViewModel.restoreSession()
-            // Wait a bit for Firebase to complete authentication
             delay(500)
             startDestination = if (loginViewModel.loginState.value is LoginState.Success) {
                 "dashboard"
@@ -83,36 +75,59 @@ fun NosteqApp(context: android.content.Context) {
                 if (showBottomBar) {
                     NavigationBar {
                         NavigationBarItem(
-                            icon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                            icon = { Icon(Icons.Filled.Home, null) },
                             label = { Text("Network") },
                             selected = currentRoute == "dashboard",
                             onClick = {
                                 navController.navigate("dashboard") {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
                             }
                         )
+
                         NavigationBarItem(
-                            icon = { Icon(Icons.Filled.Map, contentDescription = null) },
-                            label = { Text("Map") },
-                            selected = currentRoute == "map",
+                            icon = { Icon(Icons.Filled.WifiOff, null) },
+                            label = { Text("LOS") },
+                            selected = currentRoute == "los",
                             onClick = {
-                                navController.navigate("map") {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                navController.navigate("los") {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
                             }
                         )
+
                         NavigationBarItem(
-                            icon = { Icon(Icons.Filled.Person, contentDescription = null) },
-                            label = { Text("Profile") },
-                            selected = currentRoute == "profile",
+                            icon = { Icon(Icons.Filled.Warning, null) },
+                            label = { Text("Offline") },
+                            selected = currentRoute == "offline",
                             onClick = {
-                                navController.navigate("profile") {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                navController.navigate("offline") {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        )
+
+                        NavigationBarItem(
+                            icon = { Icon(Icons.Filled.Warning, null) },
+                            label = { Text("Power Fail") },
+                            selected = currentRoute == "powerfail",
+                            onClick = {
+                                navController.navigate("powerfail") {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
@@ -127,6 +142,7 @@ fun NosteqApp(context: android.content.Context) {
                 startDestination = startDestination,
                 modifier = Modifier.padding(innerPadding)
             ) {
+
                 composable("login") {
                     LoginScreen(
                         onLoginSuccess = {
@@ -136,63 +152,49 @@ fun NosteqApp(context: android.content.Context) {
                         }
                     )
                 }
+
                 composable("dashboard") {
                     NetworkDashboardScreen(
                         onRouterClick = { routerId ->
                             navController.navigate("details/$routerId")
                         },
-                        onNavigateToLos = {
-                            navController.navigate("los")
+                        onNavigateToProfile = {
+                            navController.navigate("profile")
                         },
-                        onNavigateToOffline = {
-                            navController.navigate("offline")
-                        },
-                        onNavigateToPowerFail = {
-                            navController.navigate("powerfail")
-                        },
-                        viewModel = networkViewModel
+                        onNavigateToMap = {
+                            navController.navigate("map")
+                        }
                     )
                 }
+
                 composable("los") {
                     LosFragment(
-                        onBack = { navController.popBackStack() },
                         onRouterClick = { routerId ->
                             navController.navigate("details/$routerId")
-                        },
-                        onNavigateToOnline = { navController.navigate("dashboard") },
-                        onNavigateToLos = { navController.navigate("los") },
-                        onNavigateToOffline = { navController.navigate("offline") },
-                        onNavigateToPowerFail = { navController.navigate("powerfail") },
-                        viewModel = networkViewModel
+                        }
                     )
                 }
+
                 composable("offline") {
                     OfflineFragment(
-                        onBack = { navController.popBackStack() },
                         onRouterClick = { routerId ->
                             navController.navigate("details/$routerId")
-                        },
-                        onNavigateToOnline = { navController.navigate("dashboard") },
-                        onNavigateToLos = { navController.navigate("los") },
-                        onNavigateToOffline = { navController.navigate("offline") },
-                        onNavigateToPowerFail = { navController.navigate("powerfail") },
-                        viewModel = networkViewModel
+                        }
                     )
                 }
+
                 composable("powerfail") {
                     PowerFailFragment(
-                        onBack = { navController.popBackStack() },
                         onRouterClick = { routerId ->
                             navController.navigate("details/$routerId")
-                        },
-                        onNavigateToOnline = { navController.navigate("dashboard") },
-                        onNavigateToLos = { navController.navigate("los") },
-                        onNavigateToOffline = { navController.navigate("offline") },
-                        onNavigateToPowerFail = { navController.navigate("powerfail") },
-                        viewModel = networkViewModel
+                        }
                     )
                 }
-                composable("map") { MapScreen() }
+
+                composable("map") {
+                    MapScreen()
+                }
+
                 composable("profile") {
                     ProfileScreen(
                         onLogout = {
@@ -207,19 +209,20 @@ fun NosteqApp(context: android.content.Context) {
                         }
                     )
                 }
+
                 composable("cache_analytics") {
                     CacheAnalyticsScreen(
-                        onBack = {
-                            navController.popBackStack()
-                        }
+                        onBack = { navController.popBackStack() }
                     )
                 }
+
                 composable("details/{routerId}") { backStackEntry ->
-                    val routerId = backStackEntry.arguments?.getString("routerId") ?: return@composable
+                    val routerId =
+                        backStackEntry.arguments?.getString("routerId") ?: return@composable
+
                     RouterDetailsScreen(
                         routerId = routerId,
-                        onBackClick = { navController.popBackStack() },
-                        viewModel = networkViewModel
+                        onBackClick = { navController.popBackStack() }
                     )
                 }
             }

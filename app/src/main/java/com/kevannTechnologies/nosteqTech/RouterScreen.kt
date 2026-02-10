@@ -2,6 +2,7 @@ package com.kevannTechnologies.nosteqTech
 
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -30,32 +31,48 @@ import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RouterDetailsScreen(
-    routerId: String, // This is now the ONU SN
+    routerId: String,
     onBackClick: () -> Unit = {},
     viewModel: NetworkViewModel = viewModel()
 ) {
     val networkState = viewModel.networkState.collectAsState().value
-    val onuStatuses by viewModel.onuStatuses.collectAsState() // collect live statuses
+    val onuStatuses by viewModel.onuStatuses.collectAsState()
     val signalInfo = viewModel.selectedOnuSignal.collectAsState().value
     val gpsCoordinates = viewModel.gpsCoordinates.collectAsState().value
     val speedProfile = viewModel.selectedOnuSpeedProfile.collectAsState().value
     val speedTestResult = viewModel.speedTestResult.collectAsState(initial = null).value
-    val liveOnuStatus = onuStatuses[routerId]?.status ?: "Loading..."
 
-    val onu = viewModel.getOnuById(routerId)
-
-    val uniqueId = onu?.uniqueExternalId
-
-    LaunchedEffect(routerId) {
+    // Fetch data if not already loaded
+    LaunchedEffect(Unit) {
+        Log.d("[v0] RouterDetails", "Starting - routerId: $routerId")
+        Log.d("[v0] RouterDetails", "Current networkState: $networkState")
+        viewModel.fetchAllOnus()
+        viewModel.fetchOnuStatuses()
         viewModel.clearSpeedTestResult()
     }
 
+    // Only look up ONU when networkState is Success
+    val onu = if (networkState is NetworkState.Success) {
+        Log.d("[v0] RouterDetails", "networkState is Success with ${(networkState as NetworkState.Success).onus.size} ONUs")
+        val found = viewModel.getOnuById(routerId)
+        Log.d("[v0] RouterDetails", "Lookup result for '$routerId': ${found?.name ?: "NOT FOUND"}")
+        found
+    } else {
+        Log.d("[v0] RouterDetails", "networkState is ${networkState::class.simpleName}")
+        null
+    }
+
+
+
+    val liveOnuStatus = onu?.sn?.let { onuStatuses[it]?.status } ?: "Loading..."
+    val uniqueId = onu?.uniqueExternalId
+
+    // Fetch ONU details when we have the uniqueId
     if (uniqueId != null) {
         LaunchedEffect(uniqueId) {
             viewModel.fetchOnuFullStatus(uniqueId)
             viewModel.fetchOnuSignal(uniqueId)
             viewModel.fetchOnuSpeedProfile(uniqueId)
-            viewModel.fetchGpsCoordinates()
             viewModel.fetchLiveOnuStatus(uniqueId)
         }
     }
