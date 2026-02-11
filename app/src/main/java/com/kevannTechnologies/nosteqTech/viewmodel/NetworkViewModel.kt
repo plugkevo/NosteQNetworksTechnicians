@@ -9,6 +9,7 @@ import com.kevannTechnologies.nosteqTech.ApiConfig
 import com.kevannTechnologies.nosteqTech.ZoneConfig
 import com.kevannTechnologies.nosteqTech.data.api.*
 import com.kevannTechnologies.nosteqTech.data.api.cache.FirestoreOnuCache
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -145,17 +146,23 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
 
     fun fetchAllOnus(forceRefresh: Boolean = false) {
         viewModelScope.launch {
-            try {
-                val cachedJson = sharedPreferences.getString("onus_list", null)
+            // Force Loading state immediately
+            _networkState.value = NetworkState.Loading
 
+            try {
+                // Check cache
+                val cachedJson = sharedPreferences.getString("onus_list", null)
                 if (!forceRefresh && cachedJson != null) {
                     val cached = parseOnuListFromJson(cachedJson)
                     if (cached.isNotEmpty()) {
+                        // Give the UI a tiny bit of time (200ms) to actually show the spinner
+                        delay(3000)
                         _networkState.value = NetworkState.Success(cached)
                         Log.d("[v0]", "Loaded ${cached.size} ONUs from cache")
                     }
                 }
 
+                // Fetch from Firestore
                 val fresh = firestoreCache.getOnusFromCache()
                 if (!fresh.isNullOrEmpty()) {
                     sharedPreferences.edit()
@@ -164,14 +171,15 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
 
                     _networkState.value = NetworkState.Success(fresh)
                     Log.d("[v0]", "Loaded ${fresh.size} ONUs from Firestore")
+                } else if (_networkState.value is NetworkState.Loading) {
+                    // If everything finished and we are still in Loading, we found nothing
+                    _networkState.value = NetworkState.Success(emptyList())
                 }
             } catch (e: Exception) {
-                _networkState.value =
-                    NetworkState.Error(e.message ?: "Failed to load ONUs")
+                _networkState.value = NetworkState.Error(e.message ?: "Failed to load ONUs")
             }
         }
     }
-
     fun fetchOnuStatuses() {
         viewModelScope.launch {
             try {
