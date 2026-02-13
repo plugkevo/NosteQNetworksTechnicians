@@ -91,17 +91,13 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
             _userServiceArea,
             _displayedOnuCount
         ) { grouped, search, role, area, count ->
-
             var list = grouped[statusKey] ?: emptyList()
-            Log.d("[v0] FilterFlow($statusKey)", "Looking for key '$statusKey' in grouped keys: ${grouped.keys}")
-            Log.d("[v0] FilterFlow($statusKey)", "Found ${list.size} ONUs for status '$statusKey'")
 
             // Technician zone filtering
             if (role.equals("technician", true) && area.isNotEmpty()) {
                 list = list.filter {
                     isOnuInZone(it.zoneName ?: "", area)
                 }
-                Log.d("[v0] FilterFlow($statusKey)", "After zone filter: ${list.size} ONUs")
             }
 
             // Search filtering
@@ -111,19 +107,15 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
                             it.sn.contains(search, true) ||
                             it.username?.startsWith(search, true) == true
                 }
-                Log.d("[v0] FilterFlow($statusKey)", "After search filter: ${list.size} ONUs")
             }
 
-            val result = list.take(count)
-            Log.d("[v0] FilterFlow($statusKey)", "Final result: ${result.size} ONUs")
-            result
+            // Return the final list (Last line of the lambda)
+            list.take(count)
         }.stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
             emptyList()
-        )
-
-    val onlineOnu = filteredOnusFlow("online")
+        )    val onlineOnu = filteredOnusFlow("online")
     val losOnu = filteredOnusFlow("los")
     val offlineOnu = filteredOnusFlow("offline")
     val powerFailOnu = filteredOnusFlow("power fail")
@@ -146,41 +138,37 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
 
     fun fetchAllOnus(forceRefresh: Boolean = false) {
         viewModelScope.launch {
-            // Force Loading state immediately
-            _networkState.value = NetworkState.Loading
-
-            try {
-                // Check cache
-                val cachedJson = sharedPreferences.getString("onus_list", null)
-                if (!forceRefresh && cachedJson != null) {
-                    val cached = parseOnuListFromJson(cachedJson)
-                    if (cached.isNotEmpty()) {
-                        // Give the UI a tiny bit of time (200ms) to actually show the spinner
-                        delay(3000)
-                        _networkState.value = NetworkState.Success(cached)
-                        Log.d("[v0]", "Loaded ${cached.size} ONUs from cache")
-                    }
+            // 1. Check local SharedPreferences (Instant)
+            val cachedJson = sharedPreferences.getString("onus_list", null)
+            if (!forceRefresh && cachedJson != null) {
+                val cached = parseOnuListFromJson(cachedJson)
+                if (cached.isNotEmpty()) {
+                    // Emit cache immediately so the "ONU Not Found" error doesn't show up
+                    _networkState.value = NetworkState.Success(cached)
+                    Log.d("NetworkVM", "Loaded ${cached.size} ONUs from local cache")
                 }
+            } else {
+                // Only show loading if we have absolutely no cache
+                _networkState.value = NetworkState.Loading
+            }
 
-                // Fetch from Firestore
+            // 2. Fetch fresh data from Firestore (Background)
+            try {
                 val fresh = firestoreCache.getOnusFromCache()
                 if (!fresh.isNullOrEmpty()) {
-                    sharedPreferences.edit()
-                        .putString("onus_list", convertOnuListToJson(fresh))
-                        .apply()
-
+                    saveToPrefs(fresh) // <--- Now this will work!
                     _networkState.value = NetworkState.Success(fresh)
-                    Log.d("[v0]", "Loaded ${fresh.size} ONUs from Firestore")
-                } else if (_networkState.value is NetworkState.Loading) {
-                    // If everything finished and we are still in Loading, we found nothing
-                    _networkState.value = NetworkState.Success(emptyList())
+                    Log.d("NetworkVM", "Synced ${fresh.size} ONUs from Firestore")
                 }
             } catch (e: Exception) {
-                _networkState.value = NetworkState.Error(e.message ?: "Failed to load ONUs")
+                // Only show error if we don't even have cached data to show
+                if (_networkState.value !is NetworkState.Success) {
+                    _networkState.value = NetworkState.Error(e.message ?: "Failed to sync data")
+                }
+                Log.e("NetworkVM", "Firestore sync failed: ${e.message}")
             }
         }
-    }
-    fun fetchOnuStatuses() {
+    }    fun fetchOnuStatuses() {
         viewModelScope.launch {
             try {
                 val response = apiService.getOnuStatuses(null, null, null, null)
@@ -219,6 +207,21 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
         val state = _networkState.value
         return if (state is NetworkState.Success) {
             state.onus.find { it.sn == sn }
+        } else {
+            null
+        }
+    }
+    private fun saveToPrefs(onus: List<OnuDetail>) {
+        val json = convertOnuListToJson(onus)
+        sharedPreferences.edit()
+            .putString("onus_list", json)
+            .apply()
+    }
+
+    fun getOnuByUniqueId(uniqueExternalId: String): OnuDetail? {
+        val state = _networkState.value
+        return if (state is NetworkState.Success) {
+            state.onus.find { it.uniqueExternalId == uniqueExternalId }
         } else {
             null
         }
@@ -318,10 +321,13 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
         val array = JSONArray()
         onus.forEach {
             array.put(JSONObject().apply {
+                put("uniqueExternalId", it.uniqueExternalId) // ADD THIS
                 put("sn", it.sn)
                 put("name", it.name)
                 put("zoneName", it.zoneName)
-                put("model", it.onuTypeName)
+                put("onuTypeName", it.onuTypeName)
+                put("username", it.username)
+
             })
         }
         return array.toString()
@@ -344,7 +350,7 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
                     port = o.optString("port", null),
                     onu = o.optString("onu", null),
                     onuTypeId = o.optString("onuTypeId", null),
-                    onuTypeName = o.optString("model", null),
+                    onuTypeName = o.optString("onuTypeName", null),
                     zoneId = o.optString("zoneId", null),
                     zoneName = o.optString("zoneName", null),
                     address = o.optString("address", null),

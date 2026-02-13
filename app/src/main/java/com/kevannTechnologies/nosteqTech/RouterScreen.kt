@@ -42,27 +42,19 @@ fun RouterDetailsScreen(
     val speedProfile = viewModel.selectedOnuSpeedProfile.collectAsState().value
     val speedTestResult = viewModel.speedTestResult.collectAsState(initial = null).value
 
-    // Fetch data if not already loaded
+    // Fetch all ONUs and statuses in background
     LaunchedEffect(Unit) {
-        Log.d("[v0] RouterDetails", "Starting - routerId: $routerId")
-        Log.d("[v0] RouterDetails", "Current networkState: $networkState")
         viewModel.fetchAllOnus()
         viewModel.fetchOnuStatuses()
         viewModel.clearSpeedTestResult()
     }
 
-    // Only look up ONU when networkState is Success
+    // Look up ONU by uniqueExternalId from cached data - wait for networkState Success
     val onu = if (networkState is NetworkState.Success) {
-        Log.d("[v0] RouterDetails", "networkState is Success with ${(networkState as NetworkState.Success).onus.size} ONUs")
-        val found = viewModel.getOnuById(routerId)
-        Log.d("[v0] RouterDetails", "Lookup result for '$routerId': ${found?.name ?: "NOT FOUND"}")
-        found
+        viewModel.getOnuByUniqueId(routerId)
     } else {
-        Log.d("[v0] RouterDetails", "networkState is ${networkState::class.simpleName}")
         null
     }
-
-
 
     val liveOnuStatus = onu?.sn?.let { onuStatuses[it]?.status } ?: "Loading..."
     val uniqueId = onu?.uniqueExternalId
@@ -79,23 +71,22 @@ fun RouterDetailsScreen(
 
     val context = LocalContext.current
 
+    // Show loading state while fetching data
+    if (networkState is NetworkState.Loading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
     if (onu == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("ONU not found", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Looking for SN: $routerId",
+                    text = "Looking for ID: $routerId",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "State: ${when(networkState) {
-                        is NetworkState.Loading -> "Loading..."
-                        is NetworkState.Success -> "Loaded ${(networkState as NetworkState.Success).onus.size} ONUs"
-                        is NetworkState.Error -> "Error: ${(networkState as NetworkState.Error).message}"
-                    }}",
-                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(16.dp))

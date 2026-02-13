@@ -14,8 +14,8 @@ android {
         applicationId = "com.kevannTechnologies.nosteqTech"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.4"
+        versionCode = 5
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -69,6 +69,7 @@ dependencies {
     implementation(libs.firebase.database)
     implementation(libs.firebase.config)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.material)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.junit.jupiter) // Or your catalog version    testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

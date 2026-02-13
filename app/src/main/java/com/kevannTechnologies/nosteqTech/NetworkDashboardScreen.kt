@@ -34,25 +34,22 @@ fun NetworkDashboardScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var showMenu by remember { mutableStateOf(false) }
-    var isLoadingMore by remember { mutableStateOf(false) }
 
     val networkState by networkViewModel.networkState.collectAsState()
     val onlineOnu by networkViewModel.onlineOnu.collectAsState()
     val profileData by profileViewModel.profileData.collectAsState()
+    val onuStatuses by networkViewModel.onuStatuses.collectAsState()
 
-    /** ---------------- Initial Load (runs once) ---------------- */
-    LaunchedEffect(true) {
+    LaunchedEffect(Unit) {
         profileViewModel.fetchUserProfile()
         networkViewModel.fetchAllOnus()
         networkViewModel.fetchOnuStatuses()
     }
 
-    /** ---------------- Search ---------------- */
     LaunchedEffect(searchQuery) {
         networkViewModel.setSearchQuery(searchQuery)
     }
 
-    /** ---------------- Role / Area filtering ---------------- */
     LaunchedEffect(profileData) {
         profileData?.let {
             networkViewModel.setUserRole(it.role.orEmpty())
@@ -120,133 +117,109 @@ fun NetworkDashboardScreen(
             onActiveChange = {},
             placeholder = { Text("Search SN, Name, or Username") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         ) {}
 
         Spacer(modifier = Modifier.height(8.dp))
 
         /** ---------------- Content ---------------- */
         when (networkState) {
-            is NetworkState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-
-            is NetworkState.Error -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.WifiOff, contentDescription = null, tint = NosteqRed)
-                }
-            }
-
-            else -> {
-                if (onlineOnu.isEmpty()) {
+            is NetworkState.Loading -> LoadingIndicator()
+            is NetworkState.Error -> LosErrorState()
+            is NetworkState.Success -> {
+                // If statuses are still fetching, keep showing loader to prevent "Empty State" flicker
+                if (onuStatuses.isEmpty()) {
+                    LoadingIndicator()
+                } else if (onlineOnu.isEmpty()) {
                     EmptyState()
                 } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        itemsIndexed(onlineOnu) { index, onu ->
-
-                            if (
-                                index >= onlineOnu.lastIndex - 3 &&
-                                !isLoadingMore
-                            ) {
-                                isLoadingMore = true
-                                LaunchedEffect(index) {
-                                    networkViewModel.loadMoreOnu()
-                                    isLoadingMore = false
-                                }
-                            }
-
-                            OnuCard(
-                                onu = onu,
-                                onClick = {
-                                    onRouterClick(onu.uniqueExternalId.orEmpty())
-                                }
-                            )
-                        }
-                    }
+                    OnuList(onlineOnu, networkViewModel, onRouterClick)
                 }
             }
         }
     }
 }
 
-/** ---------------- ONU Card ---------------- */
 @Composable
-fun OnuCard(
-    onu: OnuDetail,
-    onClick: () -> Unit,
-    liveStatus: OnuStatus? = null
+fun OnuList(
+    onus: List<OnuDetail>,
+    viewModel: NetworkViewModel,
+    onRouterClick: (String) -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(2.dp)
+    var isLoadingMore by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val status = liveStatus?.status ?: "Online"
-
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .background(
-                        color = when (status.lowercase()) {
-                            "los" -> NosteqRed
-                            "offline" -> Color.Gray
-                            "online" -> Color.Green
-                            else -> NosteqYellow
-                        },
-                        shape = MaterialTheme.shapes.small
-                    )
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(onu.name, fontWeight = FontWeight.Bold)
-                Text("${onu.sn} • ${onu.model ?: "Unknown"}",
-                    style = MaterialTheme.typography.bodySmall)
-                Text("Zone: ${onu.zoneName ?: "Unknown"}",
-                    style = MaterialTheme.typography.labelSmall)
-                Text("Status: $status",
-                    style = MaterialTheme.typography.labelSmall)
+        itemsIndexed(onus) { index, onu ->
+            if (index >= onus.lastIndex - 3 && !isLoadingMore) {
+                isLoadingMore = true
+                LaunchedEffect(index) {
+                    viewModel.loadMoreOnu()
+                    isLoadingMore = false
+                }
             }
 
+            OnuCard(
+                onu = onu,
+                onClick = { onRouterClick(onu.uniqueExternalId.orEmpty()) }
+            )
+        }
+    }
+}
+
+@Composable
+fun OnuCard(onu: OnuDetail, onClick: () -> Unit, liveStatus: OnuStatus? = null) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            val status = liveStatus?.status ?: "Online"
+            Box(
+                modifier = Modifier.size(12.dp).background(
+                    color = when (status.lowercase()) {
+                        "los" -> NosteqRed
+                        "offline" -> Color.Gray
+                        "online" -> Color.Green
+                        else -> NosteqYellow
+                    },
+                    shape = MaterialTheme.shapes.small
+                )
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(onu.name, fontWeight = FontWeight.Bold)
+                Text("${onu.sn} • ${onu.onuTypeName ?: "Unknown"}", style = MaterialTheme.typography.bodySmall)
+                Text("Zone: ${onu.zoneName ?: "Unknown"}", style = MaterialTheme.typography.labelSmall)
+                Text("Status: $status", style = MaterialTheme.typography.labelSmall)
+            }
             Icon(Icons.Default.ChevronRight, contentDescription = null)
         }
     }
 }
 
-/** ---------------- Empty State ---------------- */
 @Composable
-private fun EmptyState() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
+fun LoadingIndicator() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+fun EmptyState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.Warning, contentDescription = null, tint = NosteqRed, modifier = Modifier.size(64.dp))
-            Spacer(modifier = Modifier.height(12.dp))
             Text("No Online ONUs found")
         }
+    }
+}
+
+@Composable
+fun LosErrorState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Icon(Icons.Default.WifiOff, contentDescription = null, tint = NosteqRed, modifier = Modifier.size(64.dp))
     }
 }

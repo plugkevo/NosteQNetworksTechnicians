@@ -18,7 +18,6 @@ import com.kevannTechnologies.nosteqTech.ui.theme.NosteqRed
 import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileViewModel
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkState
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,30 +34,18 @@ fun OfflineFragment(
     val offlineOnu by viewModel.offlineOnu.collectAsState()
     val onuStatuses by viewModel.onuStatuses.collectAsState()
 
-    /* -------------------- DATA LOADING -------------------- */
-
-    // Fetch profile once
-    LaunchedEffect("fetchProfile") {
+    // 1. Unified Initial Load
+    LaunchedEffect(Unit) {
         profileViewModel.fetchUserProfile()
-    }
-
-    // Fetch ONUs once
-    LaunchedEffect("fetchOnus") {
         viewModel.fetchAllOnus()
-    }
-
-    // Fetch statuses with small delay
-    LaunchedEffect("fetchStatuses") {
-        delay(500)
         viewModel.fetchOnuStatuses()
     }
 
-    // Search filtering
+    // 2. Filter Sync
     LaunchedEffect(searchQuery) {
         viewModel.setSearchQuery(searchQuery)
     }
 
-    // Apply role + service area filtering
     LaunchedEffect(profileData) {
         profileData?.let {
             viewModel.setUserRole(it.role.orEmpty())
@@ -66,29 +53,23 @@ fun OfflineFragment(
         }
     }
 
-    /* -------------------- UI -------------------- */
-
     Column(modifier = Modifier.fillMaxSize()) {
-
-        // Header
+        /** ---------------- Header ---------------- */
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Offline ONUs",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            IconButton(onClick = { viewModel.fetchAllOnus() }) {
+            Text("Offline ONUs", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            IconButton(onClick = {
+                viewModel.fetchAllOnus(forceRefresh = true)
+                viewModel.fetchOnuStatuses()
+            }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Refresh")
             }
         }
 
-        // Search Bar
+        /** ---------------- Search Bar ---------------- */
         SearchBar(
             query = searchQuery,
             onQueryChange = { searchQuery = it },
@@ -97,76 +78,87 @@ fun OfflineFragment(
             onActiveChange = {},
             placeholder = { Text("Search SN, Name, or Username") },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         ) {}
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        /* -------------------- CONTENT -------------------- */
-
-        when {
-            networkState is NetworkState.Loading && offlineOnu.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-
-            offlineOnu.isEmpty() -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = NosteqRed,
-                            modifier = Modifier.size(64.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            "No Offline devices found",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            else -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    itemsIndexed(
-                        items = offlineOnu,
-                        key = { _, onu -> onu.uniqueExternalId ?: onu.sn }
-                    ) { index, onu ->
-
-                        // Pagination trigger (SAFE)
-                        if (index >= offlineOnu.size - 5) {
-                            LaunchedEffect(index) {
-                                viewModel.loadMoreOnu()
-                            }
-                        }
-
-                        OnuCard(
-                            onu = onu,
-                            liveStatus = onuStatuses[onu.sn],
-                            onClick = {
-                                onRouterClick(onu.sn)
-                            }
-                        )
-                    }
+        /** ---------------- Content Logic ---------------- */
+        when (networkState) {
+            is NetworkState.Loading -> OffLoadingState()
+            is NetworkState.Error -> OffErrorState()
+            is NetworkState.Success -> {
+                // GUARD: Wait for statuses to avoid "No Offline devices found" flicker
+                if (onuStatuses.isEmpty()) {
+                    OffLoadingState()
+                } else if (offlineOnu.isEmpty()) {
+                    EmptyOfflineState()
+                } else {
+                    OfflineOnuList(offlineOnu, onuStatuses, viewModel, onRouterClick)
                 }
             }
         }
+    }
+}
+
+/** ---------------- Sub-Composables ---------------- */
+
+@Composable
+fun OfflineOnuList(
+    onus: List<com.kevannTechnologies.nosteqTech.data.api.OnuDetail>,
+    statuses: Map<String, com.kevannTechnologies.nosteqTech.data.api.OnuStatus>,
+    viewModel: NetworkViewModel,
+    onRouterClick: (String) -> Unit
+) {
+    var isPaging by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        itemsIndexed(
+            items = onus,
+            key = { _, onu -> onu.uniqueExternalId ?: onu.sn }
+        ) { index, onu ->
+            // Pagination
+            if (index >= onus.size - 5 && !isPaging) {
+                SideEffect {
+                    isPaging = true
+                    viewModel.loadMoreOnu()
+                    isPaging = false
+                }
+            }
+
+            OnuCard(
+                onu = onu,
+                liveStatus = statuses[onu.sn],
+                onClick = { onRouterClick(onu.uniqueExternalId ?: "") }
+            )
+        }
+    }
+}
+
+@Composable
+fun OffLoadingState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+fun EmptyOfflineState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Default.Warning, null, tint = NosteqRed, modifier = Modifier.size(64.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("No Offline devices found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+fun OffErrorState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text("Failed to load data", color = NosteqRed)
     }
 }

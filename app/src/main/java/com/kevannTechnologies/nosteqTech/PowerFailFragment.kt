@@ -2,6 +2,7 @@ package com.kevannTechnologies.nosteqTech
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -17,7 +18,6 @@ import com.kevannTechnologies.nosteqTech.ui.theme.NosteqRed
 import com.kevannTechnologies.nosteqTech.ui.viewmodel.ProfileViewModel
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkState
 import com.kevannTechnologies.nosteqTech.viewmodel.NetworkViewModel
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,26 +29,23 @@ fun PowerFailFragment(
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
-    // ---- Collect state ----
     val networkState by viewModel.networkState.collectAsState()
     val powerFailOnu by viewModel.powerFailOnu.collectAsState()
     val profileData by profileViewModel.profileData.collectAsState()
     val onuStatuses by viewModel.onuStatuses.collectAsState()
 
-    // ---- Initial load (runs once) ----
+    // 1. Initial Load
     LaunchedEffect(Unit) {
         profileViewModel.fetchUserProfile()
         viewModel.fetchAllOnus()
-        delay(400)
         viewModel.fetchOnuStatuses()
     }
 
-    // ---- Search ----
+    // 2. Sync Filters
     LaunchedEffect(searchQuery) {
         viewModel.setSearchQuery(searchQuery)
     }
 
-    // ---- Role & service area ----
     LaunchedEffect(profileData) {
         profileData?.let {
             viewModel.setUserRole(it.role.orEmpty())
@@ -57,20 +54,13 @@ fun PowerFailFragment(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-
-        // ---- Header ----
+        /** ---------------- Header ---------------- */
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Power Fail ONUs",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Text("Power Fail ONUs", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             IconButton(onClick = {
                 viewModel.fetchAllOnus(forceRefresh = true)
                 viewModel.fetchOnuStatuses()
@@ -79,7 +69,7 @@ fun PowerFailFragment(
             }
         }
 
-        // ---- Search Bar ----
+        /** ---------------- Search Bar ---------------- */
         SearchBar(
             query = searchQuery,
             onQueryChange = { searchQuery = it },
@@ -87,90 +77,88 @@ fun PowerFailFragment(
             active = false,
             onActiveChange = {},
             placeholder = { Text("Search SN, Name, or Username") },
-            leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = null)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         ) {}
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // ---- Content ----
+        /** ---------------- Content Logic ---------------- */
         when (networkState) {
-            is NetworkState.Loading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-
-            is NetworkState.Error -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("Failed to load ONUs")
-                }
-            }
-
+            is NetworkState.Loading -> PfLoadingState()
+            is NetworkState.Error -> PfErrorState()
             is NetworkState.Success -> {
-                if (powerFailOnu.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(32.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = NosteqRed,
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                "No Power Fail devices found",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                // If statuses are empty, it means we haven't grouped the ONUs yet.
+                // Stay in LoadingState to prevent the empty flicker.
+                if (onuStatuses.isEmpty()) {
+                    PfLoadingState()
+                } else if (powerFailOnu.isEmpty()) {
+                    EmptyPowerFailState()
                 } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(powerFailOnu.size) { index ->
-                            val onu = powerFailOnu[index]
-
-                            // ---- Pagination ----
-                            if (index >= powerFailOnu.size - 5) {
-                                LaunchedEffect(index) {
-                                    viewModel.loadMoreOnu()
-                                }
-                            }
-
-                            OnuCard(
-                                onu = onu,
-                                liveStatus = onuStatuses[onu.sn],
-                                onClick = {
-                                    onRouterClick(onu.sn)
-                                }
-                            )
-                        }
-                    }
+                    PowerFailList(powerFailOnu, onuStatuses, viewModel, onRouterClick)
                 }
             }
         }
+    }
+}
+
+/** ---------------- Sub-Composables ---------------- */
+
+@Composable
+fun PowerFailList(
+    onus: List<com.kevannTechnologies.nosteqTech.data.api.OnuDetail>,
+    statuses: Map<String, com.kevannTechnologies.nosteqTech.data.api.OnuStatus>,
+    viewModel: NetworkViewModel,
+    onRouterClick: (String) -> Unit
+) {
+    var isPaging by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        itemsIndexed(
+            items = onus,
+            key = { _, onu -> onu.uniqueExternalId ?: onu.sn }
+        ) { index, onu ->
+            if (index >= onus.size - 5 && !isPaging) {
+                SideEffect {
+                    isPaging = true
+                    viewModel.loadMoreOnu()
+                    isPaging = false
+                }
+            }
+
+            OnuCard(
+                onu = onu,
+                liveStatus = statuses[onu.sn],
+                onClick = { onRouterClick(onu.uniqueExternalId ?: "") }
+            )
+        }
+    }
+}
+
+@Composable
+fun PfLoadingState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+fun EmptyPowerFailState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Default.Warning, null, tint = NosteqRed, modifier = Modifier.size(64.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("No Power Fail devices found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+fun PfErrorState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text("Failed to load ONUs", color = NosteqRed)
     }
 }
