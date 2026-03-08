@@ -178,7 +178,7 @@ fun LosFragment(
                             onu = onu,
                             liveStatus = onuStatuses[onu.sn],
                             onClick = {
-                                onRouterClick(onu.sn)
+                                onRouterClick(onu.uniqueExternalId ?: "")
                             }
                         )
                     }
