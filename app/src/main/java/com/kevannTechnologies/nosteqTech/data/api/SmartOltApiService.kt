@@ -90,8 +90,7 @@ fun calculateTimeSinceEvent(timeString: String?, eventName: String = "event"): S
  */
 fun calculateTimeSinceLosStatus(downTimeString: String?): String? {
     return calculateTimeSinceEvent(downTimeString, "LOS")
-
-
+}
 
 data class OnuDetailsResponse(
     val status: Boolean,
@@ -454,55 +453,6 @@ class SmartOltApiService(
             ipAddress = ip,
             losStatusDuration = losStatusDuration,
             lastOnlineTime = lastOnlineTime
-        )
-    }
-
-        val rxStr = getValue("Rx optical power")
-        val txStr = getValue("Tx optical power")
-        val distStr = getValue("ONT distance")
-        val lastDownTimeStr = getValue("Last down time")
-        val lastDownCauseStr = getValue("Last down cause")
-        val runStateStr = getValue("Run state")
-
-        Log.d("[v0] Parse", "Raw Info Length: ${info.length}")
-        Log.d("[v0] Parse", "Last down time found: $lastDownTimeStr")
-        Log.d("[v0] Parse", "Last down cause found: $lastDownCauseStr")
-        Log.d("[v0] Parse", "Run state found: $runStateStr")
-
-        // Clean numeric strings (remove units if any, though regex handles most)
-        val rx = rxStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
-        val tx = txStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
-        val dist = distStr?.replace(Regex("[^0-9]"), "")?.toIntOrNull()
-
-        val ip = getValue("IP address")
-            ?: getValue("WAN IP")
-            ?: getValue("IPv4 address")
-            ?: getValue("IP")
-
-        // Calculate LOS duration if the ONU is in LOS and we have the down time
-        val losStatusDuration = if (lastDownCauseStr?.contains("LOSi/LOBi alarm", ignoreCase = true) == true ||
-            lastDownCauseStr?.contains("LOS", ignoreCase = true) == true ||
-            runStateStr?.contains("offline", ignoreCase = true) == true) {
-            calculateTimeSinceLosStatus(lastDownTimeStr).also { duration ->
-                Log.d("[v0] Parse", "Calculated LOS Duration: $duration")
-            }
-        } else {
-            null.also {
-                Log.d("[v0] Parse", "ONU not in LOS state - cause: $lastDownCauseStr, runState: $runStateStr")
-            }
-        }
-
-        return OnuFullStatus(
-            rawText = info,
-            rxPower = rx,
-            txPower = tx,
-            distance = dist,
-            runState = runStateStr,
-            lastDownCause = lastDownCauseStr,
-            lastDownTime = lastDownTimeStr,
-            lastUpTime = getValue("Last up time"),
-            ipAddress = ip,
-            losStatusDuration = losStatusDuration
         )
     }
 
