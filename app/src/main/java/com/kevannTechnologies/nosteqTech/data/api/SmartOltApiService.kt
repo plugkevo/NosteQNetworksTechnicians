@@ -371,6 +371,8 @@ class SmartOltApiService(
             }
 
             val responseCode = connection.responseCode
+            Log.d("[v0] API", "getOnuFullStatusInfo response code: $responseCode for ID: $uniqueExternalId")
+            
             val inputStream = if (responseCode == HttpURLConnection.HTTP_OK) {
                 connection.inputStream
             } else {
@@ -378,15 +380,23 @@ class SmartOltApiService(
             }
 
             val responseString = inputStream.bufferedReader().use { it.readText() }
+            Log.d("[v0] API", "getOnuFullStatusInfo raw response (first 500 chars): ${responseString.take(500)}")
+            
             val jsonResponse = JSONObject(responseString)
+            val statusFlag = jsonResponse.optBoolean("status")
+            Log.d("[v0] API", "getOnuFullStatusInfo status flag: $statusFlag")
 
-            if (jsonResponse.optBoolean("status")) {
+            if (statusFlag) {
                 val fullInfo = jsonResponse.optString("full_status_info", "")
+                Log.d("[v0] API", "Got full_status_info, length: ${fullInfo.length}")
                 parseFullStatusInfo(fullInfo)
             } else {
+                val errorMsg = jsonResponse.optString("message", "Unknown error")
+                Log.e("[v0] API", "API returned status=false. Message: $errorMsg")
                 null
             }
         } catch (e: Exception) {
+            Log.e("[v0] API", "Exception in getOnuFullStatusInfo: ${e.message}")
             e.printStackTrace()
             null
         }
