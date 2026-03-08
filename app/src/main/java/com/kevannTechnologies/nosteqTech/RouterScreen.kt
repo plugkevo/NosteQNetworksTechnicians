@@ -60,10 +60,6 @@ fun RouterDetailsScreen(
     val liveOnuStatus = onu?.sn?.let { onuStatuses[it]?.status } ?: "Loading..."
     val uniqueId = onu?.uniqueExternalId
 
-    Log.d("[v0] RouterScreen", "routerId parameter: $routerId")
-    Log.d("[v0] RouterScreen", "Found ONU: ${onu?.name} (uniqueExternalId: $uniqueId)")
-    Log.d("[v0] RouterScreen", "About to fetch full status for uniqueId: $uniqueId")
-
     // Fetch ONU details when we have the uniqueId
     if (uniqueId != null) {
         LaunchedEffect(uniqueId) {
@@ -152,13 +148,9 @@ fun RouterDetailsScreen(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
-            // Display Device Status & Last Online/LOS Information
-            Log.d("[v0] RouterScreen", "fullStatus: $fullStatus")
-            Log.d("[v0] RouterScreen", "lastOnlineTime: ${fullStatus?.lastOnlineTime}")
-            Log.d("[v0] RouterScreen", "losStatusDuration: ${fullStatus?.losStatusDuration}")
             
+            // Display Device Status & Last Online/LOS Information
             if (fullStatus != null) {
-                Log.d("[v0] RouterScreen", "RAW STATUS TEXT (first 500 chars): ${fullStatus.rawText.take(500)}")
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                     modifier = Modifier
@@ -184,35 +176,16 @@ fun RouterDetailsScreen(
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
-                        // DEBUG: Show raw fields
-                        Text(
-                            text = "[DEBUG] Last Up Time: ${fullStatus.lastUpTime}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                        Text(
-                            text = "[DEBUG] Last Down Time: ${fullStatus.lastDownTime}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                        Text(
-                            text = "[DEBUG] Run State: ${fullStatus.runState}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
                         // Show LOS status if active
                         if (!fullStatus.losStatusDuration.isNullOrEmpty()) {
                             Text(
-                                text = "⚠ Loss of Signal (LOS)",
+                                text = "Loss of Signal (LOS)",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color(0xFFF57C00),
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "Down for: ${fullStatus.losStatusDuration}",
+                                text = fullStatus.losStatusDuration,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color(0xFFF57C00),
                                 fontWeight = FontWeight.Bold
@@ -237,35 +210,83 @@ fun RouterDetailsScreen(
                             )
                         }
                         
-                        // Show additional details
+                        // Show last disconnect reason
                         if (!fullStatus.lastDownCause.isNullOrEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Last Down Cause: ${fullStatus.lastDownCause}",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "Last Disconnect Reason",
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = fullStatus.lastDownCause,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         
+                        // Show current state
                         if (!fullStatus.runState.isNullOrEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Current State: ${fullStatus.runState}",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "Current State",
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = fullStatus.runState.replaceFirstChar { it.uppercase() },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = when {
+                                    fullStatus.runState?.contains("online", ignoreCase = true) == true -> Color(0xFF2E7D32)
+                                    fullStatus.runState?.contains("offline", ignoreCase = true) == true -> NosteqRed
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                },
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                         
-                        if (!fullStatus.lastDownTime.isNullOrEmpty()) {
+                        // Show IP address if available
+                        if (!fullStatus.ipAddress.isNullOrEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Last Down Time: ${fullStatus.lastDownTime}",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = "IP Address",
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Text(
+                                text = fullStatus.ipAddress ?: "Not assigned",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        
+                        // Show event timestamps
+                        if (!fullStatus.lastUpTime.isNullOrEmpty() || !fullStatus.lastDownTime.isNullOrEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Event Timestamps",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            
+                            if (!fullStatus.lastUpTime.isNullOrEmpty()) {
+                                Text(
+                                    text = "Last Connected: ${fullStatus.lastUpTime}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                            
+                            if (!fullStatus.lastDownTime.isNullOrEmpty()) {
+                                Text(
+                                    text = "Last Disconnected: ${fullStatus.lastDownTime}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
                         }
                     }
                 }
-            } else {
-                Log.d("[v0] RouterScreen", "fullStatus is NULL - API call may not have completed")
             }
             Text(
                 text = "SN: ${onu.sn}",

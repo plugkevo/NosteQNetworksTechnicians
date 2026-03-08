@@ -18,8 +18,6 @@ import java.util.*
 fun calculateTimeSinceEvent(timeString: String?, eventName: String = "event"): String? {
     if (timeString.isNullOrEmpty()) return null
     
-    Log.d("[v0] Time Parser", "Parsing $eventName timestamp: $timeString")
-    
     return try {
         // Parse the timestamp - handle various formats
         val formats = listOf(
@@ -30,7 +28,6 @@ fun calculateTimeSinceEvent(timeString: String?, eventName: String = "event"): S
         )
         
         var calendar: Calendar? = null
-        var lastException: Exception? = null
         
         for (formatStr in formats) {
             try {
@@ -39,24 +36,20 @@ fun calculateTimeSinceEvent(timeString: String?, eventName: String = "event"): S
                 val date = sdf.parse(timeString)
                 if (date != null) {
                     calendar = Calendar.getInstance().apply { time = date }
-                    Log.d("[v0] Time Parser", "Successfully parsed $eventName with format: $formatStr")
                     break
                 }
             } catch (e: Exception) {
-                lastException = e
                 continue
             }
         }
         
         if (calendar == null) {
-            Log.e("[v0] Time Parser", "Could not parse $eventName with any format. Last error: ${lastException?.message}")
+            Log.e("[v0] Time", "Failed to parse timestamp: $timeString")
             return null
         }
         
         val now = Calendar.getInstance()
         val diffMillis = now.timeInMillis - calendar.timeInMillis
-        
-        Log.d("[v0] Time Parser", "$eventName time difference in ms: $diffMillis")
         
         when {
             diffMillis < 0 -> "Just now"  // Future timestamp
@@ -79,8 +72,7 @@ fun calculateTimeSinceEvent(timeString: String?, eventName: String = "event"): S
             }
         }
     } catch (e: Exception) {
-        Log.e("[v0] Time Parser", "Error parsing $eventName timestamp: ${e.message}")
-        e.printStackTrace()
+        Log.e("[v0] Time", "Error calculating time difference: ${e.message}")
         null
     }
 }
@@ -358,16 +350,11 @@ class SmartOltApiService(
 
     suspend fun getOnuFullStatusInfo(uniqueExternalId: String): OnuFullStatus? = withContext(Dispatchers.IO) {
         try {
-            Log.d("[v0] API", "Starting getOnuFullStatusInfo for: $uniqueExternalId")
-            Log.d("[v0] API", "BaseURL: $baseUrl")
-            
             val url = URL("$baseUrl/onu/get_onu_full_status_info/$uniqueExternalId")
-            Log.d("[v0] API", "Full URL: $url")
-            
             val connection = url.openConnection() as HttpURLConnection
 
             connection.apply {
-                requestMethod = "GET"  // Try GET instead of POST
+                requestMethod = "GET"
                 setRequestProperty("X-Token", apiKey)
                 setRequestProperty("Content-Type", "application/json")
                 connectTimeout = 30000
@@ -375,39 +362,34 @@ class SmartOltApiService(
             }
 
             val responseCode = connection.responseCode
-            Log.d("[v0] API", "getOnuFullStatusInfo response code: $responseCode for ID: $uniqueExternalId")
             
             val inputStream = if (responseCode == HttpURLConnection.HTTP_OK || responseCode == 200) {
                 connection.inputStream
             } else {
-                Log.e("[v0] API", "Error response code: $responseCode")
+                Log.e("[v0] API", "Error response code: $responseCode for $uniqueExternalId")
                 connection.errorStream
             }
 
             val responseString = inputStream?.bufferedReader().use { it?.readText() ?: "" }
-            Log.d("[v0] API", "getOnuFullStatusInfo raw response (first 500 chars): ${responseString.take(500)}")
             
             if (responseString.isEmpty()) {
-                Log.e("[v0] API", "Response string is empty!")
+                Log.e("[v0] API", "Empty response for $uniqueExternalId")
                 return@withContext null
             }
             
             val jsonResponse = JSONObject(responseString)
             val statusFlag = jsonResponse.optBoolean("status")
-            Log.d("[v0] API", "getOnuFullStatusInfo status flag: $statusFlag")
 
             if (statusFlag) {
                 val fullInfo = jsonResponse.optString("full_status_info", "")
-                Log.d("[v0] API", "Got full_status_info, length: ${fullInfo.length}")
                 parseFullStatusInfo(fullInfo)
             } else {
                 val errorMsg = jsonResponse.optString("message", "Unknown error")
-                Log.e("[v0] API", "API returned status=false. Message: $errorMsg")
+                Log.e("[v0] API", "API error for $uniqueExternalId: $errorMsg")
                 null
             }
         } catch (e: Exception) {
-            Log.e("[v0] API", "Exception in getOnuFullStatusInfo: ${e.message}")
-            e.printStackTrace()
+            Log.e("[v0] API", "Exception fetching ONU status for $uniqueExternalId: ${e.message}")
             null
         }
     }
@@ -428,12 +410,6 @@ class SmartOltApiService(
         val runStateStr = getValue("Run state")
         val lastUpTimeStr = getValue("Last up time")
 
-        Log.d("[v0] Parse", "Raw Info Length: ${info.length}")
-        Log.d("[v0] Parse", "Last down time found: '$lastDownTimeStr'")
-        Log.d("[v0] Parse", "Last up time found: '$lastUpTimeStr'")
-        Log.d("[v0] Parse", "Last down cause found: '$lastDownCauseStr'")
-        Log.d("[v0] Parse", "Run state found: '$runStateStr'")
-
         // Clean numeric strings (remove units if any, though regex handles most)
         val rx = rxStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
         val tx = txStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
@@ -448,19 +424,13 @@ class SmartOltApiService(
         val losStatusDuration = if (lastDownCauseStr?.contains("LOSi/LOBi alarm", ignoreCase = true) == true ||
             lastDownCauseStr?.contains("LOS", ignoreCase = true) == true ||
             runStateStr?.contains("offline", ignoreCase = true) == true) {
-            calculateTimeSinceEvent(lastDownTimeStr, "LOS Down").also { duration ->
-                Log.d("[v0] Parse", "Calculated LOS Duration: $duration")
-            }
+            calculateTimeSinceEvent(lastDownTimeStr, "LOS Down")
         } else {
-            null.also {
-                Log.d("[v0] Parse", "ONU not in LOS state - cause: $lastDownCauseStr, runState: $runStateStr")
-            }
+            null
         }
 
         // Calculate last online time from "Last up time"
-        val lastOnlineTime = calculateTimeSinceEvent(lastUpTimeStr, "Last Up").also { time ->
-            Log.d("[v0] Parse", "Calculated Last Online Time: $time")
-        }
+        val lastOnlineTime = calculateTimeSinceEvent(lastUpTimeStr, "Last Up")
 
         return OnuFullStatus(
             rawText = info,
