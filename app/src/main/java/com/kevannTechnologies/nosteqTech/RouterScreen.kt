@@ -150,6 +150,24 @@ fun RouterDetailsScreen(
                 )
             }
             
+            Text(
+                text = "SN: ${onu.sn}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (onu.phoneNumber != null) {
+                Text(
+                    text = "Phone: ${onu.phoneNumber}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = "Username: ${onu.username ?: "N/A"}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
             // Display Device Status & Last Online/LOS Information with Loading State
             if (fullStatusLoading || fullStatus != null) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -308,23 +326,6 @@ fun RouterDetailsScreen(
                     }
                 }
             }
-            Text(
-                text = "SN: ${onu.sn}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (onu.phoneNumber != null) {
-                Text(
-                    text = "Phone: ${onu.phoneNumber}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                text = "Username: ${onu.username ?: "N/A"}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
