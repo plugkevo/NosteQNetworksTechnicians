@@ -149,7 +149,7 @@ fun RouterDetailsScreen(
                 )
             }
             
-            // Display LOS Duration if available OR show debug info
+            // Display Device Status & Last Online/LOS Information
             if (fullStatus != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
@@ -158,7 +158,9 @@ fun RouterDetailsScreen(
                         .padding(vertical = 4.dp),
                     colors = CardDefaults.cardColors(
                         containerColor = if (!fullStatus.losStatusDuration.isNullOrEmpty()) {
-                            Color(0xFFF57C00).copy(alpha = 0.1f)
+                            Color(0xFFF57C00).copy(alpha = 0.1f)  // Warning - LOS Active
+                        } else if (!fullStatus.lastOnlineTime.isNullOrEmpty()) {
+                            Color(0xFF2E7D32).copy(alpha = 0.1f)  // Good - Online
                         } else {
                             MaterialTheme.colorScheme.surfaceVariant
                         }
@@ -166,29 +168,51 @@ fun RouterDetailsScreen(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            text = "Device Status Details",
+                            text = "Device Status History",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFFF57C00),
+                            color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
                         )
                         
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Show LOS status if active
                         if (!fullStatus.losStatusDuration.isNullOrEmpty()) {
                             Text(
-                                text = "Loss of Signal: ${fullStatus.losStatusDuration}",
+                                text = "⚠ Loss of Signal (LOS)",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color(0xFFF57C00),
                                 fontWeight = FontWeight.SemiBold
                             )
-                        } else {
                             Text(
-                                text = "Status: Online",
+                                text = "Down for: ${fullStatus.losStatusDuration}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFFF57C00),
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        // Always show last online time
+                        if (!fullStatus.lastOnlineTime.isNullOrEmpty()) {
+                            if (!fullStatus.losStatusDuration.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                            Text(
+                                text = "Last Online",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = fullStatus.lastOnlineTime,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Color(0xFF2E7D32),
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
                         
+                        // Show additional details
                         if (!fullStatus.lastDownCause.isNullOrEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "Last Down Cause: ${fullStatus.lastDownCause}",
                                 style = MaterialTheme.typography.bodySmall,
@@ -198,7 +222,7 @@ fun RouterDetailsScreen(
                         
                         if (!fullStatus.runState.isNullOrEmpty()) {
                             Text(
-                                text = "Run State: ${fullStatus.runState}",
+                                text = "Current State: ${fullStatus.runState}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -206,7 +230,7 @@ fun RouterDetailsScreen(
                         
                         if (!fullStatus.lastDownTime.isNullOrEmpty()) {
                             Text(
-                                text = "Last Down: ${fullStatus.lastDownTime}",
+                                text = "Last Down Time: ${fullStatus.lastDownTime}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
