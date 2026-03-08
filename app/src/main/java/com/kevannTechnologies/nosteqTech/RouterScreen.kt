@@ -39,6 +39,7 @@ fun RouterDetailsScreen(
     val onuStatuses by viewModel.onuStatuses.collectAsState()
     val signalInfo = viewModel.selectedOnuSignal.collectAsState().value
     val fullStatus = viewModel.selectedOnuFullStatus.collectAsState().value
+    val fullStatusLoading = viewModel.fullStatusLoading.collectAsState().value
     val gpsCoordinates = viewModel.gpsCoordinates.collectAsState().value
     val speedProfile = viewModel.selectedOnuSpeedProfile.collectAsState().value
     val speedTestResult = viewModel.speedTestResult.collectAsState(initial = null).value
@@ -149,17 +150,17 @@ fun RouterDetailsScreen(
                 )
             }
             
-            // Display Device Status & Last Online/LOS Information
-            if (fullStatus != null) {
+            // Display Device Status & Last Online/LOS Information with Loading State
+            if (fullStatusLoading || fullStatus != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (!fullStatus.losStatusDuration.isNullOrEmpty()) {
+                        containerColor = if (!fullStatus?.losStatusDuration.isNullOrEmpty()) {
                             Color(0xFFF57C00).copy(alpha = 0.1f)  // Warning - LOS Active
-                        } else if (!fullStatus.lastOnlineTime.isNullOrEmpty()) {
+                        } else if (!fullStatus?.lastOnlineTime.isNullOrEmpty()) {
                             Color(0xFF2E7D32).copy(alpha = 0.1f)  // Good - Online
                         } else {
                             MaterialTheme.colorScheme.surfaceVariant
@@ -176,113 +177,132 @@ fun RouterDetailsScreen(
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
-                        // Show LOS status if active
-                        if (!fullStatus.losStatusDuration.isNullOrEmpty()) {
+                        if (fullStatusLoading) {
+                            // Show loading spinner
+                            Box(modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            }
                             Text(
-                                text = "Loss of Signal (LOS)",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFFF57C00),
-                                fontWeight = FontWeight.SemiBold
+                                text = "Fetching device status...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text(
-                                text = fullStatus.losStatusDuration,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFFF57C00),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        
-                        // Always show last online time
-                        if (!fullStatus.lastOnlineTime.isNullOrEmpty()) {
+                        } else if (fullStatus != null) {
+                            // Show LOS status if active
                             if (!fullStatus.losStatusDuration.isNullOrEmpty()) {
+                                Text(
+                                    text = "Loss of Signal (LOS)",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFFF57C00),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = fullStatus.losStatusDuration,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFFF57C00),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            
+                            // Always show last online time
+                            if (!fullStatus.lastOnlineTime.isNullOrEmpty()) {
+                                if (!fullStatus.losStatusDuration.isNullOrEmpty()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                                Text(
+                                    text = "Last Online",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = fullStatus.lastOnlineTime,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFF2E7D32),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            
+                            // Show last disconnect reason
+                            if (!fullStatus.lastDownCause.isNullOrEmpty()) {
                                 Spacer(modifier = Modifier.height(8.dp))
-                            }
-                            Text(
-                                text = "Last Online",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = fullStatus.lastOnlineTime,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFF2E7D32),
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        
-                        // Show last disconnect reason
-                        if (!fullStatus.lastDownCause.isNullOrEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Last Disconnect Reason",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = fullStatus.lastDownCause,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        
-                        // Show current state
-                        if (!fullStatus.runState.isNullOrEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Current State",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = fullStatus.runState.replaceFirstChar { it.uppercase() },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = when {
-                                    fullStatus.runState?.contains("online", ignoreCase = true) == true -> Color(0xFF2E7D32)
-                                    fullStatus.runState?.contains("offline", ignoreCase = true) == true -> NosteqRed
-                                    else -> MaterialTheme.colorScheme.onSurface
-                                },
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        
-                        // Show IP address if available
-                        if (!fullStatus.ipAddress.isNullOrEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "IP Address",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = fullStatus.ipAddress ?: "Not assigned",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        
-                        // Show event timestamps
-                        if (!fullStatus.lastUpTime.isNullOrEmpty() || !fullStatus.lastDownTime.isNullOrEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Event Timestamps",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            
-                            if (!fullStatus.lastUpTime.isNullOrEmpty()) {
                                 Text(
-                                    text = "Last Connected: ${fullStatus.lastUpTime}",
+                                    text = "Last Disconnect Reason",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = fullStatus.lastDownCause,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
                             
-                            if (!fullStatus.lastDownTime.isNullOrEmpty()) {
+                            // Show current state
+                            if (!fullStatus.runState.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Last Disconnected: ${fullStatus.lastDownTime}",
+                                    text = "Current State",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.outline
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                                Text(
+                                    text = fullStatus.runState.replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = when {
+                                        fullStatus.runState?.contains("online", ignoreCase = true) == true -> Color(0xFF2E7D32)
+                                        fullStatus.runState?.contains("offline", ignoreCase = true) == true -> NosteqRed
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    },
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            
+                            // Show IP address if available
+                            if (!fullStatus.ipAddress.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "IP Address",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = fullStatus.ipAddress ?: "Not assigned",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            
+                            // Show event timestamps
+                            if (!fullStatus.lastUpTime.isNullOrEmpty() || !fullStatus.lastDownTime.isNullOrEmpty()) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Event Timestamps",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                
+                                if (!fullStatus.lastUpTime.isNullOrEmpty()) {
+                                    Text(
+                                        text = "Last Connected: ${fullStatus.lastUpTime}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                                
+                                if (!fullStatus.lastDownTime.isNullOrEmpty()) {
+                                    Text(
+                                        text = "Last Disconnected: ${fullStatus.lastDownTime}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
                             }
                         }
                     }
