@@ -168,8 +168,8 @@ fun RouterDetailsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
-            // Display Device Status & Last Online/LOS Information with Loading State
-            if (fullStatusLoading || fullStatus != null) {
+            // Display Device Status & Last Online/LOS Information with Loading State - Only for LOS ONUs
+            if ((fullStatusLoading || fullStatus != null) && liveOnuStatus.contains("los", ignoreCase = true)) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                     modifier = Modifier
