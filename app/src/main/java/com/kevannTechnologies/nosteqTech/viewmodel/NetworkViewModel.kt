@@ -125,6 +125,9 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
     private val _selectedOnuSignal = MutableStateFlow<OnuSignalInfo?>(null)
     val selectedOnuSignal: StateFlow<OnuSignalInfo?> = _selectedOnuSignal
 
+    private val _selectedOnuFullStatus = MutableStateFlow<OnuFullStatus?>(null)
+    val selectedOnuFullStatus: StateFlow<OnuFullStatus?> = _selectedOnuFullStatus
+
     private val _gpsCoordinates = MutableStateFlow<Map<String, Pair<Double, Double>>>(emptyMap())
     val gpsCoordinates: StateFlow<Map<String, Pair<Double, Double>>> = _gpsCoordinates
 
@@ -232,7 +235,11 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val response = apiService.getOnuFullStatusInfo(uniqueExternalId)
                 if (response != null) {
+                    _selectedOnuFullStatus.value = response
                     Log.d("[v0]", "Fetched ONU full status for $uniqueExternalId")
+                    if (!response.losStatusDuration.isNullOrEmpty()) {
+                        Log.d("[v0]", "ONU LOS Duration: ${response.losStatusDuration}")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("[v0]", "Failed to fetch ONU full status: ${e.message}")

@@ -7,6 +7,70 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import android.util.Log
+import java.text.SimpleDateFormat
+import java.util.*
+
+
+/**
+ * Utility function to parse timestamps and calculate human-readable durations
+ * Supports formats like "2019-02-15 07:49:01+08:00"
+ */
+fun calculateTimeSinceLosStatus(downTimeString: String?): String? {
+    if (downTimeString.isNullOrEmpty()) return null
+    
+    return try {
+        // Parse the timestamp - handle various formats
+        val formats = listOf(
+            "yyyy-MM-dd HH:mm:ss+HH:mm",  // 2019-02-15 07:49:01+08:00
+            "yyyy-MM-dd HH:mm:ssZ",        // Alternative format
+            "yyyy-MM-dd HH:mm:ss",         // Without timezone
+        )
+        
+        var calendar: Calendar? = null
+        for (formatStr in formats) {
+            try {
+                val sdf = SimpleDateFormat(formatStr, Locale.getDefault())
+                sdf.isLenient = false
+                val date = sdf.parse(downTimeString)
+                if (date != null) {
+                    calendar = Calendar.getInstance().apply { time = date }
+                    break
+                }
+            } catch (e: Exception) {
+                continue
+            }
+        }
+        
+        if (calendar == null) return null
+        
+        val now = Calendar.getInstance()
+        val diffMillis = now.timeInMillis - calendar.timeInMillis
+        
+        when {
+            diffMillis < 0 -> "Just now"  // Future timestamp
+            diffMillis < 60_000 -> "Just now"  // Less than 1 minute
+            diffMillis < 3_600_000 -> {  // Less than 1 hour
+                val minutes = diffMillis / 60_000
+                "$minutes minute${if (minutes != 1L) "s" else ""} ago"
+            }
+            diffMillis < 86_400_000 -> {  // Less than 1 day
+                val hours = diffMillis / 3_600_000
+                "$hours hour${if (hours != 1L) "s" else ""} ago"
+            }
+            diffMillis < 604_800_000 -> {  // Less than 7 days
+                val days = diffMillis / 86_400_000
+                "$days day${if (days != 1L) "s" else ""} ago"
+            }
+            else -> {  // More than 7 days
+                val weeks = diffMillis / 604_800_000
+                "$weeks week${if (weeks != 1L) "s" else ""} ago"
+            }
+        }
+    } catch (e: Exception) {
+        Log.e("[v0] Time Parser", "Error parsing timestamp: ${e.message}")
+        null
+    }
+}
 
 
 
@@ -69,7 +133,9 @@ data class OnuFullStatus(
     val runState: String? = null,
     val lastDownCause: String? = null,
     val lastUpTime: String? = null,
-    val ipAddress: String? = null
+    val lastDownTime: String? = null,
+    val ipAddress: String? = null,
+    val losStatusDuration: String? = null  // Human-readable duration (e.g., "12 hours ago", "1 day ago")
 )
 
 data class OnuSignalInfo(
@@ -317,6 +383,9 @@ class SmartOltApiService(
         val rxStr = getValue("Rx optical power")
         val txStr = getValue("Tx optical power")
         val distStr = getValue("ONT distance")
+        val lastDownTimeStr = getValue("Last down time")
+        val lastDownCauseStr = getValue("Last down cause")
+        val runStateStr = getValue("Run state")
 
         // Clean numeric strings (remove units if any, though regex handles most)
         val rx = rxStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
@@ -328,15 +397,26 @@ class SmartOltApiService(
             ?: getValue("IPv4 address")
             ?: getValue("IP")
 
+        // Calculate LOS duration if the ONU is in LOS and we have the down time
+        val losStatusDuration = if (lastDownCauseStr?.contains("LOSi/LOBi alarm", ignoreCase = true) == true ||
+            lastDownCauseStr?.contains("LOS", ignoreCase = true) == true ||
+            runStateStr?.contains("offline", ignoreCase = true) == true) {
+            calculateTimeSinceLosStatus(lastDownTimeStr)
+        } else {
+            null
+        }
+
         return OnuFullStatus(
             rawText = info,
             rxPower = rx,
             txPower = tx,
             distance = dist,
-            runState = getValue("Run state"),
-            lastDownCause = getValue("Last down cause"),
+            runState = runStateStr,
+            lastDownCause = lastDownCauseStr,
+            lastDownTime = lastDownTimeStr,
             lastUpTime = getValue("Last up time"),
-            ipAddress = ip // Set the parsed IP
+            ipAddress = ip,
+            losStatusDuration = losStatusDuration
         )
     }
 

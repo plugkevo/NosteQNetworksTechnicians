@@ -38,6 +38,7 @@ fun RouterDetailsScreen(
     val networkState = viewModel.networkState.collectAsState().value
     val onuStatuses by viewModel.onuStatuses.collectAsState()
     val signalInfo = viewModel.selectedOnuSignal.collectAsState().value
+    val fullStatus = viewModel.selectedOnuFullStatus.collectAsState().value
     val gpsCoordinates = viewModel.gpsCoordinates.collectAsState().value
     val speedProfile = viewModel.selectedOnuSpeedProfile.collectAsState().value
     val speedTestResult = viewModel.speedTestResult.collectAsState(initial = null).value
@@ -147,7 +148,41 @@ fun RouterDetailsScreen(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Display LOS Duration if available
+            if (!fullStatus?.losStatusDuration.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFF57C00).copy(alpha = 0.1f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Loss of Signal Duration",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFFF57C00),
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = fullStatus?.losStatusDuration ?: "Unknown",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFFF57C00),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        if (!fullStatus?.lastDownCause.isNullOrEmpty()) {
+                            Text(
+                                text = "Cause: ${fullStatus?.lastDownCause}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
             Text(
                 text = "SN: ${onu.sn}",
                 style = MaterialTheme.typography.bodyMedium,
