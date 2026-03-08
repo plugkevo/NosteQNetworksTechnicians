@@ -18,15 +18,20 @@ import java.util.*
 fun calculateTimeSinceLosStatus(downTimeString: String?): String? {
     if (downTimeString.isNullOrEmpty()) return null
     
+    Log.d("[v0] Time Parser", "Parsing timestamp: $downTimeString")
+    
     return try {
         // Parse the timestamp - handle various formats
         val formats = listOf(
             "yyyy-MM-dd HH:mm:ss+HH:mm",  // 2019-02-15 07:49:01+08:00
+            "yyyy-MM-dd HH:mm:ssXXX",     // 2019-02-15 07:49:01+08:00 (alternative)
             "yyyy-MM-dd HH:mm:ssZ",        // Alternative format
             "yyyy-MM-dd HH:mm:ss",         // Without timezone
         )
         
         var calendar: Calendar? = null
+        var lastException: Exception? = null
+        
         for (formatStr in formats) {
             try {
                 val sdf = SimpleDateFormat(formatStr, Locale.getDefault())
@@ -34,17 +39,25 @@ fun calculateTimeSinceLosStatus(downTimeString: String?): String? {
                 val date = sdf.parse(downTimeString)
                 if (date != null) {
                     calendar = Calendar.getInstance().apply { time = date }
+                    Log.d("[v0] Time Parser", "Successfully parsed with format: $formatStr")
                     break
                 }
             } catch (e: Exception) {
+                lastException = e
+                Log.d("[v0] Time Parser", "Failed format $formatStr: ${e.message}")
                 continue
             }
         }
         
-        if (calendar == null) return null
+        if (calendar == null) {
+            Log.e("[v0] Time Parser", "Could not parse with any format. Last error: ${lastException?.message}")
+            return null
+        }
         
         val now = Calendar.getInstance()
         val diffMillis = now.timeInMillis - calendar.timeInMillis
+        
+        Log.d("[v0] Time Parser", "Time difference in ms: $diffMillis")
         
         when {
             diffMillis < 0 -> "Just now"  // Future timestamp
@@ -68,6 +81,7 @@ fun calculateTimeSinceLosStatus(downTimeString: String?): String? {
         }
     } catch (e: Exception) {
         Log.e("[v0] Time Parser", "Error parsing timestamp: ${e.message}")
+        e.printStackTrace()
         null
     }
 }
@@ -376,7 +390,7 @@ class SmartOltApiService(
     private fun parseFullStatusInfo(info: String): OnuFullStatus {
         // Helper regex to find values after ":"
         fun getValue(key: String): String? {
-            val regex = Regex("$key\\s*:\\s*(.+)", RegexOption.IGNORE_CASE) // Added IGNORE_CASE for better matching
+            val regex = Regex("$key\\s*:\\s*(.+)", RegexOption.IGNORE_CASE)
             return regex.find(info)?.groupValues?.get(1)?.trim()
         }
 
@@ -386,6 +400,11 @@ class SmartOltApiService(
         val lastDownTimeStr = getValue("Last down time")
         val lastDownCauseStr = getValue("Last down cause")
         val runStateStr = getValue("Run state")
+
+        Log.d("[v0] Parse", "Raw Info Length: ${info.length}")
+        Log.d("[v0] Parse", "Last down time found: $lastDownTimeStr")
+        Log.d("[v0] Parse", "Last down cause found: $lastDownCauseStr")
+        Log.d("[v0] Parse", "Run state found: $runStateStr")
 
         // Clean numeric strings (remove units if any, though regex handles most)
         val rx = rxStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
@@ -401,9 +420,13 @@ class SmartOltApiService(
         val losStatusDuration = if (lastDownCauseStr?.contains("LOSi/LOBi alarm", ignoreCase = true) == true ||
             lastDownCauseStr?.contains("LOS", ignoreCase = true) == true ||
             runStateStr?.contains("offline", ignoreCase = true) == true) {
-            calculateTimeSinceLosStatus(lastDownTimeStr)
+            calculateTimeSinceLosStatus(lastDownTimeStr).also { duration ->
+                Log.d("[v0] Parse", "Calculated LOS Duration: $duration")
+            }
         } else {
-            null
+            null.also {
+                Log.d("[v0] Parse", "ONU not in LOS state - cause: $lastDownCauseStr, runState: $runStateStr")
+            }
         }
 
         return OnuFullStatus(

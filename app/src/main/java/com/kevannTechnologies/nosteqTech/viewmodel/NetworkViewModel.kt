@@ -236,13 +236,16 @@ class NetworkViewModel(application: Application) : AndroidViewModel(application)
                 val response = apiService.getOnuFullStatusInfo(uniqueExternalId)
                 if (response != null) {
                     _selectedOnuFullStatus.value = response
-                    Log.d("[v0]", "Fetched ONU full status for $uniqueExternalId")
-                    if (!response.losStatusDuration.isNullOrEmpty()) {
-                        Log.d("[v0]", "ONU LOS Duration: ${response.losStatusDuration}")
-                    }
+                    Log.d("[v0] ViewModel", "Fetched ONU full status for $uniqueExternalId")
+                    Log.d("[v0] ViewModel", "Last down cause: ${response.lastDownCause}")
+                    Log.d("[v0] ViewModel", "Run state: ${response.runState}")
+                    Log.d("[v0] ViewModel", "LOS Duration: ${response.losStatusDuration}")
+                } else {
+                    Log.d("[v0] ViewModel", "Full status response was null for $uniqueExternalId")
                 }
             } catch (e: Exception) {
-                Log.e("[v0]", "Failed to fetch ONU full status: ${e.message}")
+                Log.e("[v0] ViewModel", "Failed to fetch ONU full status: ${e.message}")
+                e.printStackTrace()
             }
         }
     }
