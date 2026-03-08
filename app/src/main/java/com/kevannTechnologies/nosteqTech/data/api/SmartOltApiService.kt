@@ -358,29 +358,39 @@ class SmartOltApiService(
 
     suspend fun getOnuFullStatusInfo(uniqueExternalId: String): OnuFullStatus? = withContext(Dispatchers.IO) {
         try {
+            Log.d("[v0] API", "Starting getOnuFullStatusInfo for: $uniqueExternalId")
+            Log.d("[v0] API", "BaseURL: $baseUrl")
+            
             val url = URL("$baseUrl/onu/get_onu_full_status_info/$uniqueExternalId")
+            Log.d("[v0] API", "Full URL: $url")
+            
             val connection = url.openConnection() as HttpURLConnection
 
             connection.apply {
-                requestMethod = "POST" // Documentation says POST
+                requestMethod = "GET"  // Try GET instead of POST
                 setRequestProperty("X-Token", apiKey)
                 setRequestProperty("Content-Type", "application/json")
                 connectTimeout = 30000
                 readTimeout = 30000
-                doOutput = true // Triggers POST
             }
 
             val responseCode = connection.responseCode
             Log.d("[v0] API", "getOnuFullStatusInfo response code: $responseCode for ID: $uniqueExternalId")
             
-            val inputStream = if (responseCode == HttpURLConnection.HTTP_OK) {
+            val inputStream = if (responseCode == HttpURLConnection.HTTP_OK || responseCode == 200) {
                 connection.inputStream
             } else {
+                Log.e("[v0] API", "Error response code: $responseCode")
                 connection.errorStream
             }
 
-            val responseString = inputStream.bufferedReader().use { it.readText() }
+            val responseString = inputStream?.bufferedReader().use { it?.readText() ?: "" }
             Log.d("[v0] API", "getOnuFullStatusInfo raw response (first 500 chars): ${responseString.take(500)}")
+            
+            if (responseString.isEmpty()) {
+                Log.e("[v0] API", "Response string is empty!")
+                return@withContext null
+            }
             
             val jsonResponse = JSONObject(responseString)
             val statusFlag = jsonResponse.optBoolean("status")
