@@ -60,6 +60,10 @@ fun RouterDetailsScreen(
     val liveOnuStatus = onu?.sn?.let { onuStatuses[it]?.status } ?: "Loading..."
     val uniqueId = onu?.uniqueExternalId
 
+    Log.d("[v0] RouterScreen", "routerId parameter: $routerId")
+    Log.d("[v0] RouterScreen", "Found ONU: ${onu?.name} (uniqueExternalId: $uniqueId)")
+    Log.d("[v0] RouterScreen", "About to fetch full status for uniqueId: $uniqueId")
+
     // Fetch ONU details when we have the uniqueId
     if (uniqueId != null) {
         LaunchedEffect(uniqueId) {
@@ -148,9 +152,13 @@ fun RouterDetailsScreen(
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
-            
             // Display Device Status & Last Online/LOS Information
+            Log.d("[v0] RouterScreen", "fullStatus: $fullStatus")
+            Log.d("[v0] RouterScreen", "lastOnlineTime: ${fullStatus?.lastOnlineTime}")
+            Log.d("[v0] RouterScreen", "losStatusDuration: ${fullStatus?.losStatusDuration}")
+            
             if (fullStatus != null) {
+                Log.d("[v0] RouterScreen", "RAW STATUS TEXT (first 500 chars): ${fullStatus.rawText.take(500)}")
                 Spacer(modifier = Modifier.height(8.dp))
                 Card(
                     modifier = Modifier
@@ -172,6 +180,25 @@ fun RouterDetailsScreen(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // DEBUG: Show raw fields
+                        Text(
+                            text = "[DEBUG] Last Up Time: ${fullStatus.lastUpTime}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Text(
+                            text = "[DEBUG] Last Down Time: ${fullStatus.lastDownTime}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Text(
+                            text = "[DEBUG] Run State: ${fullStatus.runState}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
                         )
                         
                         Spacer(modifier = Modifier.height(8.dp))
@@ -237,6 +264,8 @@ fun RouterDetailsScreen(
                         }
                     }
                 }
+            } else {
+                Log.d("[v0] RouterScreen", "fullStatus is NULL - API call may not have completed")
             }
             Text(
                 text = "SN: ${onu.sn}",
