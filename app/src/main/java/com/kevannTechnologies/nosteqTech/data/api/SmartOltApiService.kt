@@ -398,7 +398,7 @@ class SmartOltApiService(
         // Helper regex to find values after ":" - handle multiple spaces
         fun getValue(key: String): String? {
             // Match the key followed by any amount of spaces/dots, then colon, then the value
-            val regex = Regex("^$key\\s*\\.?\\s*:\\s*(.+?)$", RegexOption.IGNORE_CASE or RegexOption.MULTILINE)
+            val regex = Regex("^$key\\s*\\.?\\s*:\\s*(.+?)$", RegexOption.IGNORE_CASE + RegexOption.MULTILINE)
             return regex.find(info)?.groupValues?.get(1)?.trim()
         }
 
