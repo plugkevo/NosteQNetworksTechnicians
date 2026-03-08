@@ -15,10 +15,10 @@ import java.util.*
  * Utility function to parse timestamps and calculate human-readable durations
  * Supports formats like "2019-02-15 07:49:01+08:00"
  */
-fun calculateTimeSinceLosStatus(downTimeString: String?): String? {
-    if (downTimeString.isNullOrEmpty()) return null
+fun calculateTimeSinceEvent(timeString: String?, eventName: String = "event"): String? {
+    if (timeString.isNullOrEmpty()) return null
     
-    Log.d("[v0] Time Parser", "Parsing timestamp: $downTimeString")
+    Log.d("[v0] Time Parser", "Parsing $eventName timestamp: $timeString")
     
     return try {
         // Parse the timestamp - handle various formats
@@ -36,28 +36,27 @@ fun calculateTimeSinceLosStatus(downTimeString: String?): String? {
             try {
                 val sdf = SimpleDateFormat(formatStr, Locale.getDefault())
                 sdf.isLenient = false
-                val date = sdf.parse(downTimeString)
+                val date = sdf.parse(timeString)
                 if (date != null) {
                     calendar = Calendar.getInstance().apply { time = date }
-                    Log.d("[v0] Time Parser", "Successfully parsed with format: $formatStr")
+                    Log.d("[v0] Time Parser", "Successfully parsed $eventName with format: $formatStr")
                     break
                 }
             } catch (e: Exception) {
                 lastException = e
-                Log.d("[v0] Time Parser", "Failed format $formatStr: ${e.message}")
                 continue
             }
         }
         
         if (calendar == null) {
-            Log.e("[v0] Time Parser", "Could not parse with any format. Last error: ${lastException?.message}")
+            Log.e("[v0] Time Parser", "Could not parse $eventName with any format. Last error: ${lastException?.message}")
             return null
         }
         
         val now = Calendar.getInstance()
         val diffMillis = now.timeInMillis - calendar.timeInMillis
         
-        Log.d("[v0] Time Parser", "Time difference in ms: $diffMillis")
+        Log.d("[v0] Time Parser", "$eventName time difference in ms: $diffMillis")
         
         when {
             diffMillis < 0 -> "Just now"  // Future timestamp
@@ -80,11 +79,17 @@ fun calculateTimeSinceLosStatus(downTimeString: String?): String? {
             }
         }
     } catch (e: Exception) {
-        Log.e("[v0] Time Parser", "Error parsing timestamp: ${e.message}")
+        Log.e("[v0] Time Parser", "Error parsing $eventName timestamp: ${e.message}")
         e.printStackTrace()
         null
     }
 }
+
+/**
+ * Backward compatibility wrapper
+ */
+fun calculateTimeSinceLosStatus(downTimeString: String?): String? {
+    return calculateTimeSinceEvent(downTimeString, "LOS")
 
 
 
@@ -149,7 +154,8 @@ data class OnuFullStatus(
     val lastUpTime: String? = null,
     val lastDownTime: String? = null,
     val ipAddress: String? = null,
-    val losStatusDuration: String? = null  // Human-readable duration (e.g., "12 hours ago", "1 day ago")
+    val losStatusDuration: String? = null,  // Human-readable duration (e.g., "12 hours ago", "1 day ago")
+    val lastOnlineTime: String? = null  // Human-readable "was online X time ago"
 )
 
 data class OnuSignalInfo(
@@ -393,6 +399,63 @@ class SmartOltApiService(
             val regex = Regex("$key\\s*:\\s*(.+)", RegexOption.IGNORE_CASE)
             return regex.find(info)?.groupValues?.get(1)?.trim()
         }
+
+        val rxStr = getValue("Rx optical power")
+        val txStr = getValue("Tx optical power")
+        val distStr = getValue("ONT distance")
+        val lastDownTimeStr = getValue("Last down time")
+        val lastDownCauseStr = getValue("Last down cause")
+        val runStateStr = getValue("Run state")
+        val lastUpTimeStr = getValue("Last up time")
+
+        Log.d("[v0] Parse", "Raw Info Length: ${info.length}")
+        Log.d("[v0] Parse", "Last down time found: $lastDownTimeStr")
+        Log.d("[v0] Parse", "Last up time found: $lastUpTimeStr")
+        Log.d("[v0] Parse", "Last down cause found: $lastDownCauseStr")
+        Log.d("[v0] Parse", "Run state found: $runStateStr")
+
+        // Clean numeric strings (remove units if any, though regex handles most)
+        val rx = rxStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
+        val tx = txStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
+        val dist = distStr?.replace(Regex("[^0-9]"), "")?.toIntOrNull()
+
+        val ip = getValue("IP address")
+            ?: getValue("WAN IP")
+            ?: getValue("IPv4 address")
+            ?: getValue("IP")
+
+        // Calculate LOS duration if the ONU is in LOS and we have the down time
+        val losStatusDuration = if (lastDownCauseStr?.contains("LOSi/LOBi alarm", ignoreCase = true) == true ||
+            lastDownCauseStr?.contains("LOS", ignoreCase = true) == true ||
+            runStateStr?.contains("offline", ignoreCase = true) == true) {
+            calculateTimeSinceEvent(lastDownTimeStr, "LOS Down").also { duration ->
+                Log.d("[v0] Parse", "Calculated LOS Duration: $duration")
+            }
+        } else {
+            null.also {
+                Log.d("[v0] Parse", "ONU not in LOS state - cause: $lastDownCauseStr, runState: $runStateStr")
+            }
+        }
+
+        // Calculate last online time from "Last up time"
+        val lastOnlineTime = calculateTimeSinceEvent(lastUpTimeStr, "Last Up").also { time ->
+            Log.d("[v0] Parse", "Calculated Last Online Time: $time")
+        }
+
+        return OnuFullStatus(
+            rawText = info,
+            rxPower = rx,
+            txPower = tx,
+            distance = dist,
+            runState = runStateStr,
+            lastDownCause = lastDownCauseStr,
+            lastDownTime = lastDownTimeStr,
+            lastUpTime = lastUpTimeStr,
+            ipAddress = ip,
+            losStatusDuration = losStatusDuration,
+            lastOnlineTime = lastOnlineTime
+        )
+    }
 
         val rxStr = getValue("Rx optical power")
         val txStr = getValue("Tx optical power")
