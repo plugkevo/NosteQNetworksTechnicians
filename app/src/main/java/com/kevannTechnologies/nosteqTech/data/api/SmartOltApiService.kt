@@ -413,9 +413,10 @@ class SmartOltApiService(
     }
 
     private fun parseFullStatusInfo(info: String): OnuFullStatus {
-        // Helper regex to find values after ":"
+        // Helper regex to find values after ":" - handle multiple spaces
         fun getValue(key: String): String? {
-            val regex = Regex("$key\\s*:\\s*(.+)", RegexOption.IGNORE_CASE)
+            // Match the key followed by any amount of spaces/dots, then colon, then the value
+            val regex = Regex("^$key\\s*\\.?\\s*:\\s*(.+?)$", RegexOption.IGNORE_CASE or RegexOption.MULTILINE)
             return regex.find(info)?.groupValues?.get(1)?.trim()
         }
 
@@ -428,10 +429,10 @@ class SmartOltApiService(
         val lastUpTimeStr = getValue("Last up time")
 
         Log.d("[v0] Parse", "Raw Info Length: ${info.length}")
-        Log.d("[v0] Parse", "Last down time found: $lastDownTimeStr")
-        Log.d("[v0] Parse", "Last up time found: $lastUpTimeStr")
-        Log.d("[v0] Parse", "Last down cause found: $lastDownCauseStr")
-        Log.d("[v0] Parse", "Run state found: $runStateStr")
+        Log.d("[v0] Parse", "Last down time found: '$lastDownTimeStr'")
+        Log.d("[v0] Parse", "Last up time found: '$lastUpTimeStr'")
+        Log.d("[v0] Parse", "Last down cause found: '$lastDownCauseStr'")
+        Log.d("[v0] Parse", "Run state found: '$runStateStr'")
 
         // Clean numeric strings (remove units if any, though regex handles most)
         val rx = rxStr?.replace(Regex("[^0-9.-]"), "")?.toDoubleOrNull()
